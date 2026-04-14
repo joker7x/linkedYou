@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Pharma Core v2",
+  "description": "The professional standard for drug inventory and price tracking.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}

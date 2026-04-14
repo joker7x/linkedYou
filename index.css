@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply m-0 p-0 font-sans bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 antialiased overflow-hidden transition-colors duration-300;
+    direction: rtl;
+    font-family: 'IBM Plex Sans Arabic', sans-serif;
+  }
+  #root {
+    @apply h-screen w-screen overflow-y-auto overflow-x-hidden;
+  }
+}
+
+@layer components {
+  .premium-card {
+    @apply bg-white dark:bg-slate-900 border border-black/5 dark:border-white/5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.04)] dark:shadow-none transition-all duration-300;
+  }
+  
+  .glass-nav {
+    @apply bg-white/85 dark:bg-slate-950/85 backdrop-blur-[25px] border-t border-black/5 dark:border-white/5 transition-colors duration-300;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.5);
+    border-radius: 20px;
+  }
+}
