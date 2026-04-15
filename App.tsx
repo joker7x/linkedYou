@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Package2, ShieldCheck, Zap, LayoutGrid, Info, Award } from 'lucide-react';
+import { Search, Package2, ShieldCheck, Zap, LayoutGrid, Info, Award, Lock, ExternalLink } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { fetchDrugBatchFromAPI } from './services/api.ts';
 import { Drug, TabMode, AppView, AdminConfig } from './types.ts';
@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const [allDrugs, setAllDrugs] = useState<Drug[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
+  const [isAccessDenied, setIsAccessDenied] = useState<boolean>(false);
   const [mode, setMode] = useState<TabMode>('all');
   const [searchInput, setSearchInput] = useState<string>('');
   const [search, setSearch] = useState<string>('');
@@ -92,6 +93,16 @@ const App: React.FC = () => {
       const timer = setTimeout(() => setInitialLoading(false), 500);
       try {
         const tg = (window as any).Telegram?.WebApp;
+        const isDev = window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost');
+        const hasTgData = !!tg?.initData;
+
+        if (!isDev && !hasTgData) {
+          setIsAccessDenied(true);
+          setLoading(false);
+          setInitialLoading(false);
+          return;
+        }
+
         if (tg) {
           tg.ready();
           tg.expand();
@@ -399,6 +410,28 @@ const App: React.FC = () => {
       );
     }
   };
+
+  if (isAccessDenied) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 text-center" dir="rtl">
+        <div className="w-24 h-24 rounded-[32px] bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 mb-8">
+          <Lock size={48} strokeWidth={2.5} />
+        </div>
+        <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-4 tracking-tight">الدخول محظور</h1>
+        <p className="text-slate-500 dark:text-slate-400 font-bold mb-8 max-w-xs leading-relaxed">
+          عذراً، هذا التطبيق مخصص للعمل حصرياً داخل منصة تليجرام. يرجى فتح التطبيق من خلال البوت الرسمي.
+        </p>
+        <div className="flex flex-col gap-4 w-full max-w-xs">
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-right">
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">لماذا يظهر هذا؟</div>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold leading-relaxed">
+              نحن نستخدم نظام التحقق من الهوية الخاص بتليجرام لضمان أمان بياناتك وتوفير تجربة مخصصة لك.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 selection:bg-blue-500/20 dark:selection:bg-blue-500/30 overflow-x-hidden transition-colors duration-300">
