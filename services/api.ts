@@ -34,7 +34,6 @@ const mapExternalToDrug = (item: ExternalDrugItem): Drug => {
  */
 export const fetchDrugBatchFromAPI = async (offset: number): Promise<Drug[]> => {
   try {
-    // Use local proxy to avoid CORS issues
     const response = await fetch('/api/proxy/medhome', {
       method: 'POST',
       headers: {
@@ -44,7 +43,8 @@ export const fetchDrugBatchFromAPI = async (offset: number): Promise<Drug[]> => 
     });
 
     if (!response.ok) {
-      console.warn(`API Error: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`API Proxy Error: ${response.status} - ${errorText}`);
       return [];
     }
 
@@ -57,7 +57,7 @@ export const fetchDrugBatchFromAPI = async (offset: number): Promise<Drug[]> => 
     return [];
   } catch (e) {
     console.error("Critical API Fetch Error:", e);
-    return [];
+    throw e; // Rethrow to help identify the source
   }
 };
 

@@ -18,10 +18,12 @@ async function startServer() {
 
   // API Proxy for Medhome
   app.post("/api/proxy/medhome", async (req, res) => {
+    console.log("Proxy endpoint hit");
     const { offset } = req.body;
     const MEDHOME_API_URL = "https://dwaprices.com/api_dr88g/serverz.php";
     
     try {
+      console.log(`Proxying request to ${MEDHOME_API_URL} with offset ${offset}`);
       const response = await fetch(MEDHOME_API_URL, {
         method: 'POST',
         headers: {
@@ -30,15 +32,18 @@ async function startServer() {
         body: `lastpricesForFlutter=${offset}`
       });
 
+      console.log(`External API response status: ${response.status}`);
       if (!response.ok) {
-        return res.status(response.status).json({ error: `API Error: ${response.status}` });
+        const text = await response.text();
+        console.error(`External API error response: ${text}`);
+        return res.status(response.status).json({ error: `API Error: ${response.status}`, details: text });
       }
 
       const data = await response.json();
       res.json(data);
     } catch (error) {
       console.error("Proxy Error:", error);
-      res.status(500).json({ error: "Failed to fetch from external API" });
+      res.status(500).json({ error: "Failed to fetch from external API", details: error instanceof Error ? error.message : String(error) });
     }
   });
 
