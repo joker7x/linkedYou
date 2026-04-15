@@ -149,14 +149,11 @@ const App: React.FC = () => {
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       setSearch(searchInput);
-      setAllDrugs([]);
     }, 300);
     return () => clearTimeout(timeoutId);
   }, [searchInput]);
 
-  useEffect(() => {
-    setAllDrugs([]);
-  }, [mode]);
+  // Removed useEffect that clears allDrugs on mode change
 
   const filteredDrugs = React.useMemo(() => {
     let filtered = allDrugs;
@@ -371,10 +368,20 @@ const App: React.FC = () => {
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-[0.3em]">مزامنة البيانات الحية</p>
                 </div>
               ) : filteredDrugs.length === 0 ? (
-                <MDiv key="no-results-state" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="py-24 text-center bg-slate-50 dark:bg-slate-900 rounded-[48px] border border-dashed border-slate-200 dark:border-slate-800">
+                <MDiv key="no-results-state" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="py-24 text-center bg-slate-50 dark:bg-slate-900 rounded-[48px] border border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center">
                   <Package2 size={48} className="mx-auto text-slate-300 dark:text-slate-600 mb-6" />
                   <h3 className="text-lg font-black text-slate-500 dark:text-slate-400 mb-2">لم نجد ما تبحث عنه</h3>
-                  <p className="text-xs text-slate-400 dark:text-slate-500 font-bold">حاول البحث باستخدام اسم دقيق</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-bold mb-6">حاول البحث باستخدام اسم دقيق، أو قم بتحميل المزيد من الأدوية</p>
+                  {isFetching ? (
+                    <div className="w-8 h-8 border-4 border-slate-100 dark:border-slate-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin"></div>
+                  ) : (
+                    <button 
+                      onClick={fetchNextBatch}
+                      className="px-6 py-3 bg-blue-600 text-white font-black rounded-full shadow-lg shadow-blue-500/30 dark:shadow-blue-900/20 hover:bg-blue-700 transition-all active:scale-95"
+                    >
+                      تحميل المزيد من السيرفر
+                    </button>
+                  )}
                 </MDiv>
               ) : (
                 <>
