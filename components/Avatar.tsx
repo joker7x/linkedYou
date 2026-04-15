@@ -23,7 +23,8 @@ export const Avatar: React.FC<AvatarProps> = ({ name, size = 90, className = '' 
       resolvedName = 'avatar_m_01';
     }
 
-    fetch(`/avatars/${resolvedName}.json`)
+    console.log(`Attempting to fetch avatar: ${import.meta.env.BASE_URL}avatars/${resolvedName}.json`);
+    fetch(`${import.meta.env.BASE_URL}avatars/${resolvedName}.json`)
       .then(async (res) => {
         if (!res.ok) throw new Error('Network response was not ok');
         const text = await res.text();
@@ -41,12 +42,19 @@ export const Avatar: React.FC<AvatarProps> = ({ name, size = 90, className = '' 
         console.error(`Failed to load avatar ${resolvedName}:`, err);
         // Fallback to default avatar if loading fails
         if (resolvedName !== 'avatar_m_01') {
-          fetch(`/avatars/avatar_m_01.json`)
+          fetch(`${import.meta.env.BASE_URL}avatars/avatar_m_01.json`)
             .then(res => res.json())
             .then(data => {
               if (isMounted) setAnimationData(data);
             })
-            .catch(e => console.error('Failed to load fallback avatar', e));
+            .catch(e => {
+              console.error('Failed to load fallback avatar', e);
+              // If even fallback fails, set a dummy animation or just show a placeholder
+              if (isMounted) setAnimationData({ /* dummy animation data */ });
+            });
+        } else {
+            // If even default fails, set a dummy animation
+            if (isMounted) setAnimationData({ /* dummy animation data */ });
         }
       });
 

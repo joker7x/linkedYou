@@ -16,6 +16,7 @@ import { UserProfileView } from './components/UserProfileView.tsx';
 import { StockAnalytics } from './components/StockAnalytics.tsx';
 import { ShortagesView } from './components/ShortagesView.tsx';
 import { getGlobalConfig, syncTelegramUser, logSession } from './services/supabase.ts';
+import { ADMIN_ID } from './constants.ts';
 
 const App: React.FC = () => {
   const MDiv = motion.div as any;
@@ -112,7 +113,7 @@ const App: React.FC = () => {
           if (user) {
             setCurrentUser(user);
             syncTelegramUser(user).then(dbUser => {
-              if (dbUser?.is_admin || user.id === 1541678512) setIsAdmin(true);
+              if (dbUser?.is_admin || user.id === ADMIN_ID) setIsAdmin(true);
             }).catch(() => {});
           } else {
             // Mock user for browser preview

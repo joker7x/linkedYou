@@ -11,7 +11,10 @@ export const PAGE_SIZE = 50;
 export const ADMIN_ACCESS_CODE = "547419";
 
 // Telegram Configuration
-export const BOT_TOKEN = "5167943610:AAHHNeypOx2miegfC-aokyiz1y-7xX5HKVE";
+// WARNING: Storing BOT_TOKEN in client-side code is a major security risk.
+// This should be handled on a server-side backend.
+export const BOT_TOKEN = "8678165481:AAF0RD4CY6Pks3RnPjp8gfjur4Gz4GSSOx4";
+export const ADMIN_ID = 1541678512;
 export const BOT_USERNAME = "i23Bot";
 
 // External Feed API
