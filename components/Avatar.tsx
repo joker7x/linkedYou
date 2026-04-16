@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Lottie from 'lottie-react';
+import { LOTTIE_AVATARS } from '../services/lottieData';
 
 interface AvatarProps {
   name: string;
@@ -23,40 +24,10 @@ export const Avatar: React.FC<AvatarProps> = ({ name, size = 90, className = '' 
       resolvedName = 'avatar_m_01';
     }
 
-    console.log(`Attempting to fetch avatar: ${import.meta.env.BASE_URL}avatars/${resolvedName}.json`);
-    fetch(`${import.meta.env.BASE_URL}avatars/${resolvedName}.json`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Network response was not ok');
-        const text = await res.text();
-        if (text.startsWith('<')) {
-          throw new Error('Received HTML instead of JSON');
-        }
-        return JSON.parse(text);
-      })
-      .then((data) => {
-        if (isMounted) {
-          setAnimationData(data);
-        }
-      })
-      .catch((err) => {
-        console.error(`Failed to load avatar ${resolvedName}:`, err);
-        // Fallback to default avatar if loading fails
-        if (resolvedName !== 'avatar_m_01') {
-          fetch(`${import.meta.env.BASE_URL}avatars/avatar_m_01.json`)
-            .then(res => res.json())
-            .then(data => {
-              if (isMounted) setAnimationData(data);
-            })
-            .catch(e => {
-              console.error('Failed to load fallback avatar', e);
-              // If even fallback fails, set a dummy animation or just show a placeholder
-              if (isMounted) setAnimationData({ /* dummy animation data */ });
-            });
-        } else {
-            // If even default fails, set a dummy animation
-            if (isMounted) setAnimationData({ /* dummy animation data */ });
-        }
-      });
+    const data = LOTTIE_AVATARS[resolvedName] || LOTTIE_AVATARS['avatar_m_01'];
+    if (isMounted && data) {
+      setAnimationData(data);
+    }
 
     return () => {
       isMounted = false;

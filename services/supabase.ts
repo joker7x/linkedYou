@@ -34,6 +34,13 @@ export const getPromoStats = async () => {
   return { links: links || [], visits: visits || [], error: linksError || visitsError };
 };
 
+export const deletePromoLink = async (id: string) => {
+  // First delete tracking data to avoid foreign key constraints
+  await supabase.from('promo_tracking').delete().eq('link_id', id);
+  const { error } = await supabase.from('promo_links').delete().eq('id', id);
+  return !error;
+};
+
 export const logSession = async (userId: string, duration: number, deviceType: string) => {
   const { error } = await supabase.from('user_sessions').insert({
     user_id: userId,

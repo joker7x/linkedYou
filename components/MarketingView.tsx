@@ -7,7 +7,7 @@ import {
   MessageCircle, Send, Users, MapPin, Bot, RefreshCw
 } from 'lucide-react';
 import { Drug, PromoLink, PromoVisit } from '../types.ts';
-import { createPromoLink, getPromoStats, searchDrugs } from '../services/supabase.ts';
+import { createPromoLink, getPromoStats, searchDrugs, deletePromoLink } from '../services/supabase.ts';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell 
@@ -88,6 +88,18 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleDeleteLink = async (id: string) => {
+    if (window.confirm('هل أنت متأكد من حذف هذا الرابط؟ سيتم حذف جميع إحصائيات الزيارات المرتبطة به.')) {
+      const success = await deletePromoLink(id);
+      if (success) {
+        setLinks(links.filter(l => l.id !== id));
+        setVisits(visits.filter(v => v.link_id !== id));
+      } else {
+        alert('حدث خطأ أثناء الحذف');
+      }
+    }
   };
 
   const getStatsForLink = (linkId: string) => {
@@ -307,7 +319,10 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
                       >
                         {copiedId === link.id ? <Check size={18} /> : <Copy size={18} />}
                       </button>
-                      <button className="p-3 rounded-xl bg-white dark:bg-slate-900 text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-rose-500 hover:text-rose-500 transition-all">
+                      <button 
+                        onClick={() => handleDeleteLink(link.id)}
+                        className="p-3 rounded-xl bg-white dark:bg-slate-900 text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-rose-500 hover:text-rose-500 transition-all"
+                      >
                         <Trash2 size={18} />
                       </button>
                     </div>
