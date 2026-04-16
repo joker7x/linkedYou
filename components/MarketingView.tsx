@@ -97,7 +97,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
         setLinks(links.filter(l => l.id !== id));
         setVisits(visits.filter(v => v.link_id !== id));
       } else {
-        alert('حدث خطأ أثناء الحذف');
+        alert('حدث خطأ أثناء الحذف. يرجى التأكد من إضافة صلاحيات الحذف (DELETE Policy) في قاعدة بيانات Supabase.');
       }
     }
   };

@@ -37,8 +37,20 @@ export const getPromoStats = async () => {
 export const deletePromoLink = async (id: string) => {
   // First delete tracking data to avoid foreign key constraints
   await supabase.from('promo_tracking').delete().eq('link_id', id);
-  const { error } = await supabase.from('promo_links').delete().eq('id', id);
-  return !error;
+  const { data, error } = await supabase.from('promo_links').delete().eq('id', id).select();
+  
+  if (error) {
+    console.error('Error deleting promo link:', error);
+    return false;
+  }
+  
+  // If data is empty, it means RLS blocked it or the row didn't exist
+  if (!data || data.length === 0) {
+    console.error('Delete operation was blocked by RLS or link not found.');
+    return false;
+  }
+  
+  return true;
 };
 
 export const logSession = async (userId: string, duration: number, deviceType: string) => {
@@ -79,6 +91,15 @@ export const logActivity = async (userId: string, type: string, points: number =
     target_id: targetId
   });
   return !error;
+};
+
+export const getDrugByNo = async (drugNo: string): Promise<Drug | null> => {
+  const { data, error } = await supabase.from(MAIN_TABLE).select('*').eq('drug_no', drugNo).single();
+  if (error) {
+    console.error('Error fetching drug by no:', error);
+    return null;
+  }
+  return data;
 };
 
 export const searchDrugs = async (query: string): Promise<Drug[]> => {
