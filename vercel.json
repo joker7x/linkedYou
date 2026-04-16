@@ -1,14 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/",
-      "has": [
-        {
-          "type": "query",
-          "key": "promo"
-        }
-      ],
-      "destination": "/api/promo-html"
+      "source": "/promo/:promoId",
+      "destination": "/api/promo-html?promo=:promoId"
     },
     {
       "source": "/api/(.*)",

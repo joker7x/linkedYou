@@ -77,9 +77,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <meta property="og:image" content="${dynamicImageUrl}" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:image" content="${dynamicImageUrl}" />
-  <meta http-equiv="refresh" content="0;url=${baseUrl}/?promo=${promoId}" />
 </head>
 <body>
+  <h1>${title}</h1>
+  <p>${description}</p>
+  <a href="${baseUrl}/?promo=${promoId}">اضغط هنا للانتقال للمتجر</a>
   <script>window.location.href = "${baseUrl}/?promo=${promoId}";</script>
 </body>
 </html>
