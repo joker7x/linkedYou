@@ -34,8 +34,6 @@ export interface CommunityUser {
   skills?: string[];
   pharmacyName?: string;
   contactInfo?: string;
-  trustScore: number;
-  trustCount: number;
 }
 
 export interface CommunityPost {

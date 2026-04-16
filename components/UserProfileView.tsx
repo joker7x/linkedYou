@@ -8,20 +8,20 @@ import {
 import { CommunityUser } from '../types.ts';
 import { Avatar } from './Avatar.tsx';
 import { AvatarPicker } from './AvatarPicker.tsx';
-import { getUserProfile, updateUserProfile, updateTrust, getTrustStats } from '../services/supabase.ts';
+import { getUserProfile, updateUserProfile } from '../services/supabase.ts';
 
 interface UserProfileViewProps {
   user: any; // Can be partial or full CommunityUser
   currentUserId: string;
   onBack: () => void;
+  onUpdateProfile?: (profile: any) => void;
 }
 
-export const UserProfileView: React.FC<UserProfileViewProps> = ({ user: initialUser, currentUserId, onBack }) => {
+export const UserProfileView: React.FC<UserProfileViewProps> = ({ user: initialUser, currentUserId, onBack, onUpdateProfile }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [trustStats, setTrustStats] = useState({ score: 0, count: 0 });
   
   const [formData, setFormData] = useState<Partial<CommunityUser>>({
     name: initialUser.name || initialUser.first_name || 'صيدلي',
@@ -30,9 +30,7 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({ user: initialU
     location: initialUser.location || '',
     pharmacyName: initialUser.pharmacyName || '',
     contactInfo: initialUser.contactInfo || '',
-    avatarId: initialUser.avatarId || 'avatar_m_01',
-    trustScore: 0,
-    trustCount: 0
+    avatarId: initialUser.avatarId || 'avatar_m_01'
   });
 
   const isOwnProfile = String(initialUser.id) === currentUserId;
@@ -40,12 +38,10 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({ user: initialU
   useEffect(() => {
     const loadProfile = async () => {
       const profile = await getUserProfile(String(initialUser.id));
-      const stats = await getTrustStats(String(initialUser.id));
       
       if (profile) {
         setFormData(prev => ({ ...prev, ...profile }));
       }
-      setTrustStats(stats);
       setLoading(false);
     };
     loadProfile();
@@ -56,23 +52,13 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({ user: initialU
     const success = await updateUserProfile(currentUserId, formData);
     if (success) {
       setIsEditing(false);
+      if (onUpdateProfile) {
+        onUpdateProfile(formData);
+      }
     } else {
       alert('فشل حفظ التغييرات. يرجى المحاولة مرة أخرى.');
     }
     setSaving(false);
-  };
-
-  const handleTrust = async () => {
-    if (currentUserId === 'guest') {
-      alert('يرجى تسجيل الدخول أولاً.');
-      return;
-    }
-    const success = await updateTrust(String(initialUser.id), currentUserId, 5);
-    if (success) {
-      const stats = await getTrustStats(String(initialUser.id));
-      setTrustStats(stats);
-      alert('شكراً لثقتك!');
-    }
   };
 
   const getLevelColor = (level: string = 'bronze') => {
@@ -155,28 +141,6 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({ user: initialU
             <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mb-4">{formData.title}</p>
           </>
         )}
-        
-        {/* Trust System Badge */}
-        <div className="flex items-center justify-center gap-4 mt-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-2xl border border-blue-100 dark:border-blue-900/30">
-            <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400 mb-0.5">
-              <ShieldCheck size={16} />
-              <span className="text-xs font-black uppercase tracking-wider">نظام الثقة</span>
-            </div>
-            <div className="text-lg font-black text-slate-900 dark:text-white">{trustStats.score}%</div>
-            <div className="text-[10px] font-bold text-slate-400">{trustStats.count} تقييم</div>
-          </div>
-          
-          {!isOwnProfile && (
-            <button 
-              onClick={handleTrust}
-              className="flex flex-col items-center gap-1 bg-slate-50 dark:bg-slate-800 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors group"
-            >
-              <ThumbsUp size={20} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
-              <span className="text-[10px] font-black text-slate-500">ثق به</span>
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Pharmacy Details */}

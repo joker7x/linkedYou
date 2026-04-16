@@ -15,7 +15,7 @@ import { CommunityView } from './components/CommunityView.tsx';
 import { UserProfileView } from './components/UserProfileView.tsx';
 import { StockAnalytics } from './components/StockAnalytics.tsx';
 import { ShortagesView } from './components/ShortagesView.tsx';
-import { getGlobalConfig, syncTelegramUser, logSession } from './services/supabase.ts';
+import { getGlobalConfig, syncTelegramUser, logSession, getUserProfile, checkUserBan, supabase } from './services/supabase.ts';
 import { ADMIN_ID } from './constants.ts';
 
 const App: React.FC = () => {
@@ -36,6 +36,8 @@ const App: React.FC = () => {
   });
   const [selectedDrug, setSelectedDrug] = useState<Drug | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [banInfo, setBanInfo] = useState<{ isBanned: boolean; reason?: string; until?: string } | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('favorites');
     return saved ? new Set(JSON.parse(saved)) : new Set();
@@ -111,18 +113,28 @@ const App: React.FC = () => {
           tg.backgroundColor = '#f8fafc';
           const user = tg.initDataUnsafe?.user;
           if (user) {
-            setCurrentUser(user);
-            syncTelegramUser(user).then(dbUser => {
-              if (dbUser?.is_admin || user.id === ADMIN_ID) setIsAdmin(true);
-            }).catch(() => {});
+            const dbUser = await syncTelegramUser(user);
+            if (dbUser?.is_admin || user.id === ADMIN_ID) setIsAdmin(true);
+            
+            // Load profile data to sync avatar and name
+            const profile = await getUserProfile(String(user.id));
+            // Merge: dbUser (permissions) + profile (avatar/bio)
+            const fullUser = { ...dbUser, ...profile };
+            setCurrentUser(fullUser);
+            setBanInfo(checkUserBan(fullUser));
           } else {
             // Mock user for browser preview
-            setCurrentUser({
+            const mockUser = {
               id: 123456789,
               first_name: 'مستخدم',
               last_name: 'تجريبي',
               username: 'testuser'
-            });
+            };
+            const dbUser = await syncTelegramUser(mockUser);
+            const profile = await getUserProfile(String(mockUser.id));
+            const fullUser = { ...dbUser, ...profile };
+            setCurrentUser(fullUser);
+            setBanInfo(checkUserBan(fullUser));
             setIsAdmin(true);
           }
         }
@@ -173,8 +185,12 @@ const App: React.FC = () => {
     for (const drug of filtered) {
         uniqueMap.set(drug.drug_no, drug);
     }
-    return Array.from(uniqueMap.values());
-  }, [allDrugs, mode, search]);
+    const result = Array.from(uniqueMap.values());
+    
+    // Apply items limit if restricted
+    const limit = currentUser?.device_info?.items_limit || 100;
+    return result.slice(0, limit);
+  }, [allDrugs, mode, search, currentUser]);
 
   const fetchNextBatch = useCallback(async () => {
     if (isFetching || !config.liveSync) return;
@@ -200,6 +216,49 @@ const App: React.FC = () => {
   }, [allDrugs.length, isFetching, config.liveSync]);
 
   // Removed scroll event listener
+
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    // Real-time listener for permission/ban changes
+    const channel = supabase
+      .channel(`user-changes-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'app_users',
+          filter: `id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          console.log('User permissions updated in real-time:', payload.new);
+          const updatedUser = payload.new;
+          setCurrentUser((prev: any) => ({
+            ...prev,
+            ...updatedUser,
+            // Ensure device_info is merged if it's an object
+            device_info: {
+              ...(prev?.device_info || {}),
+              ...(updatedUser.device_info || {})
+            }
+          }));
+          
+          // Re-check ban status
+          setBanInfo(checkUserBan(updatedUser));
+          
+          // Update admin status if changed
+          if (updatedUser.is_admin !== undefined) {
+            setIsAdmin(updatedUser.is_admin || Number(currentUser.id) === ADMIN_ID);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, isAdmin]);
 
   const handleNavigate = (view: AppView) => {
     setCurrentView(view);
@@ -245,6 +304,23 @@ const App: React.FC = () => {
   }, []);
 
   const renderView = () => {
+    if (banInfo?.isBanned) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6 text-center" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 p-10 rounded-[40px] shadow-2xl max-w-md w-full border border-rose-100 dark:border-rose-900/20">
+            <div className="w-20 h-20 bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 rounded-3xl flex items-center justify-center mb-8 mx-auto">
+              <Lock size={40} />
+            </div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white mb-4">تم تقييد حسابك</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed font-bold">
+              {banInfo.reason}. {banInfo.until ? `ينتهي الحظر في: ${banInfo.until}` : 'هذا الحظر دائم نتيجة مخالفة القوانين.'}
+            </p>
+            <div className="text-[10px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-widest">Pharma Core Security</div>
+          </div>
+        </div>
+      );
+    }
+
     if (config.maintenanceMode && !isAdmin) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6 text-center" dir="rtl">
@@ -268,9 +344,34 @@ const App: React.FC = () => {
       );
     }
 
+    const restrictedPages = currentUser?.device_info?.restricted_pages || [];
+    const isRestricted = Array.isArray(restrictedPages) && restrictedPages.includes(currentView);
+    
+    if (isRestricted && !isAdmin) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6 text-center" dir="rtl">
+          <div className="bg-white dark:bg-slate-900 p-10 rounded-[40px] shadow-2xl max-w-md w-full border border-slate-100 dark:border-slate-800">
+            <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 text-slate-400 rounded-3xl flex items-center justify-center mb-8 mx-auto">
+              <Lock size={40} />
+            </div>
+            <h1 className="text-xl font-black text-slate-900 dark:text-white mb-4">هذه الصفحة مقفولة</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 leading-relaxed font-bold">
+              ليس لديك صلاحية للوصول إلى هذا القسم حالياً. يرجى التواصل مع الإدارة لرفع التقييد.
+            </p>
+            <button 
+              onClick={() => setCurrentView('home')}
+              className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm active:scale-95 transition-all"
+            >
+              العودة للرئيسية
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     switch (currentView) {
       case 'admin': return <AdminView onBack={() => setCurrentView('home')} drugsCount={allDrugs.length} config={config} onUpdateConfig={c => setConfig({...config, ...c})} currentUser={currentUser} />;
-      case 'settings': return <SettingsView user={currentUser} darkMode={isDarkMode} toggleDarkMode={() => setIsDarkMode(!isDarkMode)} onClearFavorites={() => {}} onBack={() => setCurrentView('home')} isAdmin={isAdmin} onOpenAdmin={() => setCurrentView('admin')} onOpenInvoice={() => setCurrentView('invoice')} onOpenAnalytics={() => setCurrentView('analytics')} onOpenShortages={() => setCurrentView('market_shortages')} onOpenProfile={() => setCurrentView('profile')} />;
+      case 'settings': return <SettingsView user={currentUser} darkMode={isDarkMode} toggleDarkMode={() => setIsDarkMode(!isDarkMode)} onClearFavorites={() => {}} onBack={() => setCurrentView('home')} isAdmin={isAdmin} onOpenAdmin={() => setCurrentView('admin')} onOpenInvoice={() => setCurrentView('invoice')} onOpenAnalytics={() => setCurrentView('analytics')} onOpenShortages={() => setCurrentView('market_shortages')} onOpenProfile={() => setCurrentView('profile')} onUpdateUser={(updates: any) => setCurrentUser((prev: any) => ({...prev, ...updates}))} />;
       case 'invoice': return <InvoiceBuilder onBack={() => setCurrentView('home')} />;
       case 'shortages': return <InventoryView onBack={() => setCurrentView('home')} allDrugs={allDrugs} shortageDrugIds={['1', '5']} userId={currentUser?.id ? String(currentUser.id) : 'guest'} />;
       case 'market_shortages': return <ShortagesView onBack={() => setCurrentView('settings')} />;
@@ -284,6 +385,11 @@ const App: React.FC = () => {
           user={profileUser} 
           currentUserId={currentUser?.id ? String(currentUser.id) : 'guest'} 
           onBack={() => setCurrentView('community')} 
+          onUpdateProfile={(profile: any) => {
+            if (!selectedUserId || selectedUserId === String(currentUser?.id)) {
+              setCurrentUser((prev: any) => ({ ...prev, ...profile }));
+            }
+          }}
         />;
       default: 
         // Mock Gamification Data for Header
@@ -446,7 +552,12 @@ const App: React.FC = () => {
       <MDiv key={currentView} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="w-full">
         {renderView()}
       </MDiv>
-      <BottomNavigation currentView={currentView} onNavigate={handleNavigate} />
+      <BottomNavigation 
+        currentView={currentView} 
+        onNavigate={handleNavigate} 
+        restrictedPages={currentUser?.device_info?.restricted_pages || []}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 };

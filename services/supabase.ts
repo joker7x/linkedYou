@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY, MAIN_TABLE, BOT_USERNAME } from '../constants.ts';
 import { Drug } from '../types.ts';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 export const logSession = async (userId: string, duration: number, deviceType: string) => {
   const { error } = await supabase.from('user_sessions').insert({
@@ -163,6 +163,28 @@ export const updateGlobalConfig = async (config: any): Promise<void> => {
   }
 };
 
+const mergeAdminSettings = async (user: any) => {
+  if (!user) return null;
+  const settingsKey = `user_settings_${user.id}`;
+  const { data: setting } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', settingsKey)
+    .maybeSingle();
+
+  if (setting && setting.value) {
+    return {
+      ...user,
+      is_admin: setting.value.is_admin ?? user.is_admin,
+      device_info: {
+        ...user.device_info,
+        ...setting.value
+      }
+    };
+  }
+  return user;
+};
+
 export const syncTelegramUser = async (user: any): Promise<any> => {
   if (!user?.id) return null;
   
@@ -170,7 +192,7 @@ export const syncTelegramUser = async (user: any): Promise<any> => {
     .from('app_users')
     .select('*')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   const userData = {
     id: user.id,
@@ -180,33 +202,94 @@ export const syncTelegramUser = async (user: any): Promise<any> => {
     last_seen: new Date().toISOString()
   };
 
+  let finalUser;
   if (existingUser) {
     await supabase.from('app_users').update(userData).eq('id', user.id);
-    return { ...existingUser, ...userData };
+    finalUser = { ...existingUser, ...userData };
   } else {
     const { data, error } = await supabase.from('app_users').insert({ ...userData, device_info: { items_limit: 100 } }).select();
-    return error ? null : data[0];
+    finalUser = error ? null : data[0];
   }
+
+  return await mergeAdminSettings(finalUser);
 };
 
 export const getAllUsers = async (): Promise<any[]> => {
-  const { data, error } = await supabase
+  const { data: users, error } = await supabase
     .from('app_users')
     .select('*')
     .order('last_seen', { ascending: false });
     
-  return error ? [] : data;
+  if (error || !users) return [];
+
+  const { data: allSettings } = await supabase
+    .from('app_settings')
+    .select('*')
+    .like('key', 'user_settings_%');
+
+  return users.map(user => {
+    const setting = allSettings?.find(s => s.key === `user_settings_${user.id}`);
+    if (setting && setting.value) {
+      return {
+        ...user,
+        is_admin: setting.value.is_admin ?? user.is_admin,
+        device_info: {
+          ...user.device_info,
+          ...setting.value
+        }
+      };
+    }
+    return user;
+  });
 };
 
 export const updateUserPermissions = async (userId: number, updates: any): Promise<void> => {
-  const { data: user } = await supabase.from('app_users').select('*').eq('id', userId).single();
-  if (!user) return;
+  try {
+    // 1. Fetch current user
+    const { data: user, error: fetchError } = await supabase
+      .from('app_users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+      
+    if (fetchError || !user) return;
+    
+    // 2. Merge updates into device_info
+    const deviceInfo = { ...(user.device_info || {}), ...updates };
+    const body: any = { device_info: deviceInfo };
+    
+    // Top-level fields
+    if ('is_admin' in updates) body.is_admin = updates.is_admin;
+    if ('is_premium' in updates) body.is_premium = updates.is_premium;
+    
+    // 3. Save to app_users (Primary Source)
+    await supabase.from('app_users').update(body).eq('id', userId);
+
+    // 4. Save to app_settings (Backup)
+    const settingsKey = `user_settings_${userId}`;
+    await supabase.from('app_settings').upsert({ 
+      key: settingsKey, 
+      value: { ...deviceInfo, is_admin: body.is_admin ?? user.is_admin, updated_at: new Date().toISOString() } 
+    }, { onConflict: 'key' });
+
+  } catch (err) {
+    console.error("Error in updateUserPermissions:", err);
+  }
+};
+
+export const checkUserBan = (user: any): { isBanned: boolean; reason?: string; until?: string } => {
+  if (!user?.device_info) return { isBanned: false };
+  const { ban_status, ban_until } = user.device_info;
   
-  const body = { device_info: { ...user.device_info, ...updates } };
-  if ('is_admin' in updates) (body as any).is_admin = updates.is_admin;
-  if ('is_premium' in updates) (body as any).is_premium = updates.is_premium;
+  if (ban_status === 'permanent') return { isBanned: true, reason: 'حظر كلي ودائم' };
+  if (ban_status === 'temporary' && ban_until) {
+    const untilDate = new Date(ban_until);
+    if (untilDate > new Date()) {
+      return { isBanned: true, reason: 'حظر مؤقت', until: untilDate.toLocaleString('ar-EG') };
+    }
+  }
   
-  await supabase.from('app_users').update(body).eq('id', userId);
+  return { isBanned: false };
 };
 
 export const getDrugsByIds = async (ids: number[]): Promise<Drug[]> => {
@@ -273,8 +356,6 @@ export const getPosts = async (userId: string): Promise<any[]> => {
     .not('content', 'ilike', '__COMMENT__%')
     .not('content', 'ilike', '__LIKE__%')
     .not('content', 'ilike', '__PROFILE__%')
-    .not('content', 'ilike', '__TRUST__%')
-    .not('content', 'ilike', '__ADMIN_TRUST__%')
     .order('created_at', { ascending: false });
   
   if (error) {
@@ -628,59 +709,4 @@ export const updateUserProfile = async (userId: string, profile: any): Promise<b
   }
 };
 
-export const updateTrust = async (targetUserId: string, fromUserId: string, value: number): Promise<boolean> => {
-  const content = `__TRUST__${targetUserId}__${value}`;
-  const id = generateUUID();
-  const { error } = await supabase
-    .from('posts')
-    .insert({
-      id,
-      user_id: fromUserId,
-      content,
-      created_at: new Date().toISOString()
-    });
-  return !error;
-};
-
-export const getTrustStats = async (targetUserId: string): Promise<{ score: number; count: number }> => {
-  const { data, error } = await supabase
-    .from('posts')
-    .select('content')
-    .or(`content.ilike.__TRUST__${targetUserId}__%,content.ilike.__ADMIN_TRUST__${targetUserId}__%`);
-    
-  if (error || !data) return { score: 0, count: 0 };
-  
-  // Check for admin override first
-  const adminRecord = data.find(d => d.content.startsWith('__ADMIN_TRUST__'));
-  if (adminRecord) {
-    const adminScore = parseInt(adminRecord.content.split('__')[3]) || 0;
-    return {
-      score: adminScore,
-      count: data.length
-    };
-  }
-
-  const values = data.map(d => parseInt(d.content.split('__')[3]) || 0);
-  if (values.length === 0) return { score: 0, count: 0 };
-  
-  const sum = values.reduce((a, b) => a + b, 0);
-  return {
-    score: Math.round((sum / (values.length * 5)) * 100),
-    count: values.length
-  };
-};
-
-export const adminUpdateTrust = async (targetUserId: string, adminId: string, score: number): Promise<boolean> => {
-  // Admin trust record with a special prefix or flag
-  const content = `__ADMIN_TRUST__${targetUserId}__${score}`;
-  const id = generateUUID();
-  const { error } = await supabase
-    .from('posts')
-    .insert({
-      id,
-      user_id: adminId,
-      content,
-      created_at: new Date().toISOString()
-    });
-  return !error;
-};
+// --- Trust System Removed ---

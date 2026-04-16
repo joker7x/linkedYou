@@ -27,9 +27,7 @@ const currentUser: CommunityUser = {
   isVerified: true,
   level: 'gold',
   points: 1250,
-  role: 'pharmacist',
-  trustScore: 100,
-  trustCount: 1
+  role: 'pharmacist'
 };
 
 const mockPosts: CommunityPost[] = [
@@ -41,9 +39,7 @@ const mockPosts: CommunityPost[] = [
       isVerified: true,
       level: 'silver',
       points: 850,
-      role: 'pharmacist',
-      trustScore: 95,
-      trustCount: 1
+      role: 'pharmacist'
     },
     content: 'لاحظت نقص شديد في حقن الكليكسان الأيام دي، هل في حد لقى بديل متوفر في شركات التوزيع؟',
     mentionedDrugs: [{ id: 'd1', name: 'Clexane 40mg' }],
@@ -60,9 +56,7 @@ const mockPosts: CommunityPost[] = [
       isVerified: false,
       level: 'bronze',
       points: 120,
-      role: 'pharmacist',
-      trustScore: 80,
-      trustCount: 1
+      role: 'pharmacist'
     },
     content: 'تحديث بخصوص الأسعار: تم تعديل سعر كونكور 5 ملجم اليوم. يرجى مراجعة السيستم.',
     mentionedDrugs: [{ id: 'd2', name: 'Concor 5mg' }],
@@ -79,9 +73,7 @@ const mockPosts: CommunityPost[] = [
       isVerified: true,
       level: 'gold',
       points: 2100,
-      role: 'pharmacist',
-      trustScore: 100,
-      trustCount: 1
+      role: 'pharmacist'
     },
     content: 'يا جماعة، مريض بيسأل عن بديل لكليكسان 40 عشان مش لاقيه، هل ينفع ندي له حاجة تانية نفس المادة الفعالة؟',
     mentionedDrugs: [{ id: 'd1', name: 'Clexane 40mg' }],
@@ -178,9 +170,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
                 level: profile?.level || 'bronze' as const, 
                 points: profile?.points || 0, 
                 role: profile?.role || 'pharmacist' as const,
-                avatarId: profile?.avatarId || 'avatar_m_01',
-                trustScore: profile?.trustScore || 0,
-                trustCount: profile?.trustCount || 0
+                avatarId: profile?.avatarId || 'avatar_m_01'
               },
               content: c.content,
               reactions: c.reactions,
@@ -227,9 +217,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
           isVerified: true, 
           level: 'gold' as const, 
           points: 0, 
-          role: 'pharmacist' as const,
-          trustScore: 100,
-          trustCount: 1
+          role: 'pharmacist' as const
         },
         content: content,
         createdAt: new Date().toISOString()
@@ -445,9 +433,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
             level: profile?.level || 'bronze' as const, 
             points: profile?.points || 0, 
             role: profile?.role || 'pharmacist' as const,
-            avatarId: profile?.avatarId || 'avatar_m_01',
-            trustScore: profile?.trustScore || 0,
-            trustCount: profile?.trustCount || 0
+            avatarId: profile?.avatarId || 'avatar_m_01'
           },
           content: p.content,
           mentionedDrugs: [],
@@ -646,7 +632,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
         await logActivity(userId, 'post', 10, addedPost.id);
         const newPost: CommunityPost = {
           id: addedPost.id,
-          author: { id: userId, name: 'مستخدم', isVerified: false, level: 'bronze', points: 0, role: 'pharmacist', trustScore: 0, trustCount: 0 },
+          author: { id: userId, name: 'مستخدم', isVerified: false, level: 'bronze', points: 0, role: 'pharmacist' },
           content: addedPost.content,
           mentionedDrugs: [],
           mentionedActiveIngredients: [],

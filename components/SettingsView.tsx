@@ -16,6 +16,7 @@ interface SettingsViewProps {
   onOpenAnalytics: () => void;
   onOpenShortages: () => void;
   onOpenProfile: () => void;
+  onUpdateUser?: (updates: any) => void;
 }
 
 const SettingSection = React.memo(({ title, children }: { title: string, children?: React.ReactNode }) => (
@@ -146,7 +147,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user, darkMode, togg
              </div>
              <div className="flex-1 relative z-10">
                 <div className="flex items-center gap-2">
-                   <h2 className="text-lg font-black">{user.first_name} {user.last_name}</h2>
+                   <h2 className="text-lg font-black">{user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'مستخدم'}</h2>
                    {gamification.isVerified && <Shield size={14} className="text-blue-200" />}
                 </div>
                 <p className="text-[10px] font-black text-blue-100/70 uppercase tracking-widest mt-1">عرض وتعديل الملف الشخصي</p>
