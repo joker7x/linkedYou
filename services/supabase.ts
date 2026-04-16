@@ -94,12 +94,38 @@ export const logActivity = async (userId: string, type: string, points: number =
 };
 
 export const getDrugByNo = async (drugNo: string): Promise<Drug | null> => {
-  const { data, error } = await supabase.from(MAIN_TABLE).select('*').eq('drug_no', drugNo).single();
-  if (error) {
-    console.error('Error fetching drug by no:', error);
+  try {
+    let drugData = null;
+    
+    // First try by drug_no
+    const { data, error } = await supabase
+      .from(MAIN_TABLE)
+      .select('*')
+      .eq('drug_no', drugNo)
+      .limit(1);
+      
+    if (!error && data && data.length > 0) {
+      drugData = data[0];
+    }
+    
+    // Fallback: try matching by id if drug_no fails or errors
+    if (!drugData) {
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from(MAIN_TABLE)
+        .select('*')
+        .eq('id', drugNo)
+        .limit(1);
+        
+      if (!fallbackError && fallbackData && fallbackData.length > 0) {
+        drugData = fallbackData[0];
+      }
+    }
+    
+    return drugData;
+  } catch (err) {
+    console.error('Exception in getDrugByNo:', err);
     return null;
   }
-  return data;
 };
 
 export const searchDrugs = async (query: string): Promise<Drug[]> => {

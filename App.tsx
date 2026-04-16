@@ -45,6 +45,8 @@ const App: React.FC = () => {
   });
   const [promoId, setPromoId] = useState<string | null>(null);
 
+  const [isTelegram, setIsTelegram] = useState(false);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const promo = params.get('promo');
@@ -108,8 +110,12 @@ const App: React.FC = () => {
         const tg = (window as any).Telegram?.WebApp;
         const isDev = window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost');
         const hasTgData = !!tg?.initData;
+        const params = new URLSearchParams(window.location.search);
+        const hasPromo = !!params.get('promo');
+        
+        setIsTelegram(hasTgData);
 
-        if (!isDev && !hasTgData) {
+        if (!isDev && !hasTgData && !hasPromo) {
           setIsAccessDenied(true);
           setLoading(false);
           setInitialLoading(false);
@@ -548,7 +554,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6 text-center" dir="rtl">
         <AnimatePresence>
           {promoId && (
-            <PromoView promoId={promoId} onClose={() => setPromoId(null)} />
+            <PromoView promoId={promoId} onClose={() => setPromoId(null)} isTelegram={isTelegram} />
           )}
         </AnimatePresence>
         
@@ -579,18 +585,22 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 selection:bg-blue-500/20 dark:selection:bg-blue-500/30 overflow-x-hidden transition-colors duration-300">
       <AnimatePresence>
         {promoId && (
-          <PromoView promoId={promoId} onClose={() => setPromoId(null)} />
+          <PromoView promoId={promoId} onClose={() => setPromoId(null)} isTelegram={isTelegram} />
         )}
       </AnimatePresence>
-      <MDiv key={currentView} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="w-full">
-        {renderView()}
-      </MDiv>
-      <BottomNavigation 
-        currentView={currentView} 
-        onNavigate={handleNavigate} 
-        restrictedPages={currentUser?.device_info?.restricted_pages || []}
-        isAdmin={isAdmin}
-      />
+      {!promoId && (
+        <MDiv key={currentView} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="w-full">
+          {renderView()}
+        </MDiv>
+      )}
+      {!promoId && (
+        <BottomNavigation 
+          currentView={currentView} 
+          onNavigate={handleNavigate} 
+          restrictedPages={currentUser?.device_info?.restricted_pages || []}
+          isAdmin={isAdmin}
+        />
+      )}
     </div>
   );
 };

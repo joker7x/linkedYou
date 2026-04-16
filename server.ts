@@ -6,9 +6,13 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { SUPABASE_URL, SUPABASE_KEY, MAIN_TABLE } from "./constants.ts";
+import satori from 'satori';
+import { Resvg } from '@resvg/resvg-js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+let fontBuffer: ArrayBuffer | null = null;
 
 async function startServer() {
   const app = express();
@@ -17,6 +21,172 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  // Dynamic OG Image Endpoint
+  app.get('/api/og-image', async (req, res) => {
+    try {
+      const title = req.query.title as string || 'Pharma Core';
+      const company = req.query.company as string || 'شركة الأدوية';
+      const priceNew = req.query.priceNew as string || '---';
+      const priceOld = req.query.priceOld as string || '---';
+
+      if (!fontBuffer) {
+        // Fetch a font that supports Arabic (Tajawal)
+        const fontRes = await fetch('https://raw.githubusercontent.com/googlefonts/tajawal/main/fonts/ttf/Tajawal-Bold.ttf');
+        fontBuffer = await fontRes.arrayBuffer();
+      }
+
+      const svg = await satori(
+        {
+          type: 'div',
+          props: {
+            dir: 'rtl',
+            style: {
+              display: 'flex',
+              flexDirection: 'column',
+              width: '100%',
+              height: '100%',
+              backgroundColor: '#0f172a',
+              color: 'white',
+              padding: '60px',
+              fontFamily: 'Tajawal',
+              justifyContent: 'center',
+              alignItems: 'center',
+              textAlign: 'center',
+              backgroundImage: 'radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 100%)',
+            },
+            children: [
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: '#2563eb',
+                    color: 'white',
+                    padding: '10px 30px',
+                    borderRadius: '40px',
+                    fontSize: '24px',
+                    fontWeight: 'bold',
+                    marginBottom: '40px',
+                  },
+                  children: 'عرض ترويجي حصري',
+                }
+              },
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    fontSize: '70px',
+                    fontWeight: 'bold',
+                    marginBottom: '20px',
+                    color: '#ffffff',
+                    lineHeight: 1.2,
+                    textAlign: 'center',
+                    maxWidth: '1000px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  },
+                  children: title,
+                }
+              },
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    fontSize: '40px',
+                    marginBottom: '60px',
+                    color: '#94a3b8',
+                  },
+                  children: company,
+                }
+              },
+              {
+                type: 'div',
+                props: {
+                  style: {
+                    display: 'flex',
+                    justifyContent: 'center',
+                    gap: '40px',
+                    width: '100%',
+                  },
+                  children: [
+                    {
+                      type: 'div',
+                      props: {
+                        style: {
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                          border: '2px solid rgba(16, 185, 129, 0.2)',
+                          padding: '30px 50px',
+                          borderRadius: '30px',
+                        },
+                        children: [
+                          { type: 'span', props: { style: { fontSize: '24px', color: '#34d399', marginBottom: '10px' }, children: 'السعر الجديد' } },
+                          { type: 'span', props: { style: { fontSize: '60px', fontWeight: 'bold', color: '#10b981' }, children: `${priceNew} ج.م` } }
+                        ]
+                      }
+                    },
+                    {
+                      type: 'div',
+                      props: {
+                        style: {
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                          border: '2px solid rgba(148, 163, 184, 0.2)',
+                          padding: '30px 50px',
+                          borderRadius: '30px',
+                        },
+                        children: [
+                          { type: 'span', props: { style: { fontSize: '24px', color: '#94a3b8', marginBottom: '10px' }, children: 'السعر القديم' } },
+                          { type: 'span', props: { style: { fontSize: '60px', fontWeight: 'bold', color: '#64748b', textDecoration: 'line-through' }, children: `${priceOld} ج.م` } }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          width: 1200,
+          height: 630,
+          fonts: [
+            {
+              name: 'Tajawal',
+              data: fontBuffer,
+              weight: 700,
+              style: 'normal',
+            },
+          ],
+        }
+      );
+
+      const resvg = new Resvg(svg, {
+        background: 'rgba(15, 23, 42, 1)',
+        fitTo: {
+          mode: 'width',
+          value: 1200,
+        },
+      });
+      const pngData = resvg.render();
+      const pngBuffer = pngData.asPng();
+
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.send(pngBuffer);
+    } catch (error) {
+      console.error('Error generating OG image:', error);
+      res.status(500).send('Error generating image');
+    }
+  });
 
   // API Proxy for Medhome
   app.post("/api/proxy/medhome", async (req, res) => {
@@ -75,11 +245,17 @@ async function startServer() {
         
         let title = promo.title || "Pharma Core Premium";
         let description = "منصة متكاملة لمتابعة أحدث أسعار الأدوية، النواقص، والتحديثات الحصرية في السوق المصري.";
+        let company = "";
+        let priceNew = "";
+        let priceOld = "";
         
         if (drugData && drugData.length > 0) {
           const drug = drugData[0];
-          title = `تحديث سعر: ${drug.name_ar || drug.name_en}`;
-          description = `السعر الجديد: ${drug.price_new} ج.م بدلاً من ${drug.price_old} ج.م | ${drug.company}`;
+          title = drug.name_ar || drug.name_en || title;
+          company = drug.company || company;
+          priceNew = drug.price_new || priceNew;
+          priceOld = drug.price_old || priceOld;
+          description = `السعر الجديد: ${priceNew} ج.م بدلاً من ${priceOld} ج.م | ${company}`;
         }
 
         // Read index.html and inject tags
@@ -93,13 +269,20 @@ async function startServer() {
         html = html.replace(/<meta property="og:title" content="[^"]*" \/>/g, `<meta property="og:title" content="${title}" />`);
         html = html.replace(/<meta property="og:description" content="[^"]*" \/>/g, `<meta property="og:description" content="${description}" />`);
         
-        // We can also generate a dynamic image URL if we have a service, but for now we use the text data
-        // You could use a service like og-image.vercel.app to generate an image from text
+        // Use our dynamic OG image endpoint
         const encodedTitle = encodeURIComponent(title);
-        const encodedDesc = encodeURIComponent(description);
-        const dynamicImageUrl = `https://og-image.vercel.app/${encodedTitle}.png?theme=light&md=1&fontSize=100px&images=https%3A%2F%2Fassets.vercel.com%2Fimage%2Fupload%2Ffront%2Fassets%2Fdesign%2Fvercel-triangle-black.svg&widths=0&heights=0`;
+        const encodedCompany = encodeURIComponent(company);
+        const encodedPriceNew = encodeURIComponent(priceNew);
+        const encodedPriceOld = encodeURIComponent(priceOld);
+        
+        // Construct the absolute URL for the OG image
+        const host = req.get('host');
+        const protocol = req.protocol;
+        const baseUrl = `${protocol}://${host}`;
+        const dynamicImageUrl = `${baseUrl}/api/og-image?title=${encodedTitle}&company=${encodedCompany}&priceNew=${encodedPriceNew}&priceOld=${encodedPriceOld}`;
         
         html = html.replace(/<meta property="og:image" content="[^"]*" \/>/g, `<meta property="og:image" content="${dynamicImageUrl}" />`);
+        html = html.replace(/<meta name="twitter:image" content="[^"]*" \/>/g, `<meta name="twitter:image" content="${dynamicImageUrl}" />`);
         
         // If using Vite middleware, we need to let Vite transform the HTML first
         if (process.env.NODE_ENV !== "production") {

@@ -11,9 +11,10 @@ import { Drug, PromoLink } from '../types.ts';
 interface PromoViewProps {
   promoId: string;
   onClose: () => void;
+  isTelegram?: boolean;
 }
 
-export const PromoView: React.FC<PromoViewProps> = ({ promoId, onClose }) => {
+export const PromoView: React.FC<PromoViewProps> = ({ promoId, onClose, isTelegram = false }) => {
   const [linkData, setLinkData] = useState<PromoLink | null>(null);
   const [drugData, setDrugData] = useState<Drug | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,9 +119,11 @@ export const PromoView: React.FC<PromoViewProps> = ({ promoId, onClose }) => {
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">عرض ترويجي حصري</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 bg-white dark:bg-slate-800 rounded-full shadow-sm">
-            <X size={20} />
-          </button>
+          {isTelegram && (
+            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 bg-white dark:bg-slate-800 rounded-full shadow-sm">
+              <X size={20} />
+            </button>
+          )}
         </div>
 
         {/* Content Card */}
@@ -165,7 +168,7 @@ export const PromoView: React.FC<PromoViewProps> = ({ promoId, onClose }) => {
                   <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/5 rounded-bl-full"></div>
                   <div className="text-[10px] font-black text-emerald-600/70 dark:text-emerald-400/70 uppercase tracking-widest mb-2">السعر الجديد</div>
                   <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400 flex items-baseline gap-1">
-                    {drugData?.price_new || '---'} <span className="text-sm font-bold">ج.م</span>
+                    {drugData?.price_new || linkData.description?.match(/\d+/)?.[0] || '---'} <span className="text-sm font-bold">ج.م</span>
                   </div>
                 </div>
                 <div className="p-5 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-slate-100 dark:border-slate-800 relative overflow-hidden">
@@ -215,12 +218,14 @@ export const PromoView: React.FC<PromoViewProps> = ({ promoId, onClose }) => {
                   </a>
                 )}
                 
-                <button 
-                  onClick={onClose}
-                  className="w-full py-4 text-slate-400 font-bold text-sm hover:text-slate-600 transition-colors mt-2"
-                >
-                  تخطي والذهاب للتطبيق
-                </button>
+                {isTelegram && (
+                  <button 
+                    onClick={onClose}
+                    className="w-full py-4 text-slate-400 font-bold text-sm hover:text-slate-600 transition-colors mt-2"
+                  >
+                    تخطي والذهاب للتطبيق
+                  </button>
+                )}
               </div>
             </div>
           </motion.div>

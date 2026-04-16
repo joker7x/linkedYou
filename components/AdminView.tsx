@@ -464,14 +464,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                     color="blue"
                   />
                   <SystemAction 
-                    label="التحليل بالذكاء الاصطناعي" 
-                    description="تفعيل ميزات AI في البحث والتحليل" 
-                    icon={Bot} 
-                    active={config.aiAnalysis} 
-                    onClick={() => saveConfig({aiAnalysis: !config.aiAnalysis})} 
-                    color="indigo"
-                  />
-                  <SystemAction 
                     label="الوضع الصارم (Strict Mode)" 
                     description="تطبيق قيود أمنية إضافية على الحسابات" 
                     icon={Lock} 
@@ -852,7 +844,7 @@ const SystemAction = ({ label, description, icon: Icon, active, onClick, color =
       </div>
       <div className={`w-12 h-6 rounded-full p-1 transition-all flex items-center shrink-0 ${active ? colorMap[color] : 'bg-slate-200 dark:bg-slate-700'}`}>
         <motion.div 
-          animate={{ x: active ? 24 : 0 }} 
+          animate={{ x: active ? -24 : 0 }} 
           transition={{ type: 'spring', stiffness: 500, damping: 30 }} 
           className="w-4 h-4 bg-white rounded-full shadow-md" 
         />

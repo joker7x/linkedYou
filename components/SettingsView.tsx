@@ -178,8 +178,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user, darkMode, togg
                     </div>
                     <span className="font-black text-[15px] text-slate-700 dark:text-slate-200">الوضع الليلي</span>
                 </div>
-                <div onClick={toggleDarkMode} dir="ltr" className={`w-12 h-7 rounded-full p-1 cursor-pointer flex items-center transition-all duration-300 ${darkMode ? 'bg-indigo-500' : 'bg-slate-200'}`}>
-                    <MDiv layout className="w-5 h-5 bg-white rounded-full shadow-sm" animate={{ x: darkMode ? 20 : 0 }} />
+                <div onClick={toggleDarkMode} className={`w-12 h-7 rounded-full p-1 cursor-pointer flex items-center transition-all duration-300 ${darkMode ? 'bg-indigo-500' : 'bg-slate-200'}`}>
+                    <MDiv layout className="w-5 h-5 bg-white rounded-full shadow-sm" animate={{ x: darkMode ? -20 : 0 }} />
                 </div>
             </div>
         </SettingSection>
