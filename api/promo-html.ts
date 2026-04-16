@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { SUPABASE_URL, SUPABASE_KEY, MAIN_TABLE } from '../../constants.ts';
+import { SUPABASE_URL, SUPABASE_KEY, MAIN_TABLE } from '../constants.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const promoId = req.query.promo as string;
@@ -18,22 +18,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       const promoData = await promoRes.json();
       
-      if (promoData && promoData.length > 0) {
+      // Safety check: Ensure we got an array
+      if (Array.isArray(promoData) && promoData.length > 0) {
         const promo = promoData[0];
         title = promo.title || title;
         
-        // Take price data directly from the promo record
+        // Take price data directly from the promo record, with safety checks
         priceNew = promo.price_new ? String(promo.price_new) : "";
         priceOld = promo.price_old ? String(promo.price_old) : "";
         
-        if (priceNew && priceOld) {
-          const n = parseFloat(priceNew);
-          const o = parseFloat(priceOld);
-          if (o > 0 && o > n) {
-            discount = Math.round(((o - n) / o) * 100);
-          }
+        const n = parseFloat(priceNew);
+        const o = parseFloat(priceOld);
+        if (!isNaN(n) && !isNaN(o) && o > 0 && o > n) {
+          discount = Math.round(((o - n) / o) * 100);
         }
-        description = `السعر الجديد: ${priceNew} ج.م بدلاً من ${priceOld} ج.م`;
+        description = (priceNew && priceOld) ? `السعر الجديد: ${priceNew} ج.م بدلاً من ${priceOld} ج.م` : description;
+      } else {
+        console.error('Promo link data empty or not array:', promoData);
       }
     }
   } catch (error) {
