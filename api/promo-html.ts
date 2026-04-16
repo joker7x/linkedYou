@@ -20,27 +20,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       if (promoData && promoData.length > 0) {
         const promo = promoData[0];
-        const drugNo = promo.drug_no;
         title = promo.title || title;
         
-        const drugRes = await fetch(`${SUPABASE_URL}/rest/v1/${MAIN_TABLE}?drug_no=eq.${drugNo}&select=*`, {
-          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-        });
-        const drugData = await drugRes.json();
+        // Take price data directly from the promo record
+        priceNew = promo.price_new ? String(promo.price_new) : "";
+        priceOld = promo.price_old ? String(promo.price_old) : "";
         
-        if (drugData && drugData.length > 0) {
-          const drug = drugData[0];
-          title = drug.name_ar || drug.name_en || title;
-          priceNew = drug.price_new ? String(drug.price_new) : priceNew;
-          priceOld = drug.price_old ? String(drug.price_old) : priceOld;
-          
+        if (priceNew && priceOld) {
           const n = parseFloat(priceNew);
           const o = parseFloat(priceOld);
           if (o > 0 && o > n) {
             discount = Math.round(((o - n) / o) * 100);
           }
-          description = `السعر الجديد: ${priceNew} ج.م بدلاً من ${priceOld} ج.م`;
         }
+        description = `السعر الجديد: ${priceNew} ج.م بدلاً من ${priceOld} ج.م`;
       }
     }
   } catch (error) {
@@ -62,21 +55,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
-  <meta property="og:title" content="${title}" />
-  <meta property="og:description" content="${description}" />
-  <meta property="og:url" content="${baseUrl}/offer/${promoId}" />
-  <meta property="og:type" content="website" />
-  <meta property="og:image" content="${dynamicImageUrl}" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:image" content="${dynamicImageUrl}" />
+  
+  <!-- Primary Meta Tags -->
+  <meta name="description" content="${description}">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${baseUrl}/offer/${promoId}">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${description}">
+  <meta property="og:image" content="${dynamicImageUrl}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${title}">
+  <meta name="twitter:description" content="${description}">
+  <meta name="twitter:image" content="${dynamicImageUrl}">
 </head>
 <body>
   <h1>${title}</h1>
   <p>${description}</p>
-  <a href="${baseUrl}/?promo=${promoId || ''}">اضغط هنا للانتقال للمتجر</a>
   <script>window.location.href = "${baseUrl}/?promo=${promoId || ''}";</script>
 </body>
 </html>

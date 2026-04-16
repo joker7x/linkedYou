@@ -194,6 +194,8 @@ export interface PromoLink {
   created_by: string;
   title?: string;
   description?: string;
+  price_new?: number | string;
+  price_old?: number | string;
 }
 
 export interface PromoVisit {

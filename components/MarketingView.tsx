@@ -70,7 +70,9 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
       channel_link: channelLink,
       created_by: String(currentUser?.id || 'admin'),
       title: selectedDrug.name_ar || selectedDrug.name_en || 'بدون اسم',
-      description: `سعر جديد: ${selectedDrug.price_new || 0} ج.م`
+      description: `سعر جديد: ${selectedDrug.price_new || 0} ج.م`,
+      price_new: selectedDrug.price_new,
+      price_old: selectedDrug.price_old
     });
     
     if (data) {
