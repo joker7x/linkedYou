@@ -28,12 +28,16 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
   const [channelLink, setChannelLink] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const fetchStats = async () => {
     setLoading(true);
-    const { links: l, visits: v } = await getPromoStats();
-    setLinks(l);
-    setVisits(v);
+    const { links: l, visits: v, error } = await getPromoStats();
+    if (error) {
+      setErrorMsg(error.message || 'حدث خطأ أثناء جلب البيانات. تأكد من إنشاء الجداول في قاعدة البيانات.');
+    }
+    setLinks(l || []);
+    setVisits(v || []);
     setLoading(false);
   };
 
@@ -54,19 +58,27 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
   const handleCreateLink = async () => {
     if (!selectedDrug) return;
     setIsCreating(true);
+    setErrorMsg(null);
+    
+    // Ensure we have a valid drug_no, fallback to id, or generate a temporary one if both are missing
+    const validDrugNo = selectedDrug.drug_no || selectedDrug.id || `temp_${Math.random().toString(36).substring(2, 9)}`;
+    
     const { data, error } = await createPromoLink({
-      drug_no: selectedDrug.drug_no,
-      bot_username: botUsername,
+      drug_no: String(validDrugNo),
+      bot_username: botUsername || 'i23Bot',
       channel_link: channelLink,
-      created_by: String(currentUser.id),
-      title: selectedDrug.name_ar || selectedDrug.name_en,
-      description: `سعر جديد: ${selectedDrug.price_new} ج.م`
+      created_by: String(currentUser?.id || 'admin'),
+      title: selectedDrug.name_ar || selectedDrug.name_en || 'بدون اسم',
+      description: `سعر جديد: ${selectedDrug.price_new || 0} ج.م`
     });
+    
     if (data) {
       setLinks([data, ...links]);
       setSelectedDrug(null);
       setSearchQuery('');
       setSearchResults([]);
+    } else if (error) {
+      setErrorMsg(error.message || 'حدث خطأ أثناء إنشاء الرابط. تأكد من إنشاء الجداول في قاعدة البيانات.');
     }
     setIsCreating(false);
   };
@@ -124,6 +136,12 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
               <Plus className="text-blue-600" size={24} />
               إنشاء رابط ترويجي
             </h3>
+
+            {errorMsg && (
+              <div className="mb-4 p-4 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-2xl text-rose-600 dark:text-rose-400 text-sm font-bold">
+                {errorMsg}
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>
