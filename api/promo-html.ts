@@ -67,6 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   <title>${title}</title>
   <meta property="og:title" content="${title}" />
   <meta property="og:description" content="${description}" />
+  <meta property="og:url" content="${baseUrl}/offer/${promoId}" />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="${dynamicImageUrl}" />
   <meta name="twitter:card" content="summary_large_image" />
