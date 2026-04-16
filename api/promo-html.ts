@@ -1,6 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import fs from 'fs';
-import path from 'path';
 import { SUPABASE_URL, SUPABASE_KEY, MAIN_TABLE } from '../../constants.ts';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -11,7 +9,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Fetch promo link details
     const promoRes = await fetch(`${SUPABASE_URL}/rest/v1/promo_links?id=eq.${promoId}&select=*`, {
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
     });
@@ -19,16 +16,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     let title = "Pharma Core Premium";
     let description = "منصة متكاملة لمتابعة أحدث أسعار الأدوية، النواقص، والتحديثات الحصرية في السوق المصري.";
-    let company = "";
     let priceNew = "";
     let priceOld = "";
-
+    let discount = 0;
+    
     if (promoData && promoData.length > 0) {
       const promo = promoData[0];
       const drugNo = promo.drug_no;
       title = promo.title || title;
       
-      // Fetch drug details
       const drugRes = await fetch(`${SUPABASE_URL}/rest/v1/${MAIN_TABLE}?drug_no=eq.${drugNo}&select=*`, {
         headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
       });
@@ -37,17 +33,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (drugData && drugData.length > 0) {
         const drug = drugData[0];
         title = drug.name_ar || drug.name_en || title;
-        company = drug.company || company;
-        priceNew = drug.price_new || priceNew;
-        priceOld = drug.price_old || priceOld;
-        description = `السعر الجديد: ${priceNew} ج.م بدلاً من ${priceOld} ج.م | ${company}`;
-      } else if (promo.description) {
-        // Fallback to promo description if drug not found
-        const match = promo.description.match(/\d+/);
-        if (match) {
-          priceNew = match[0];
-          description = `السعر الجديد: ${priceNew} ج.م`;
+        priceNew = drug.price_new || "";
+        priceOld = drug.price_old || "";
+        
+        if (priceNew && priceOld) {
+          const n = parseFloat(priceNew);
+          const o = parseFloat(priceOld);
+          if (o > 0 && o > n) {
+            discount = Math.round(((o - n) / o) * 100);
+          }
         }
+        description = `السعر الجديد: ${priceNew} ج.م بدلاً من ${priceOld} ج.م`;
       }
     }
 
@@ -55,15 +51,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const protocol = req.headers['x-forwarded-proto'] || 'https';
     const baseUrl = `${protocol}://${host}`;
 
-    // Use dynamic OG image endpoint
-    const encodedTitle = encodeURIComponent(title);
-    const encodedCompany = encodeURIComponent(company);
+    const encodedName = encodeURIComponent(title);
     const encodedPriceNew = encodeURIComponent(priceNew);
     const encodedPriceOld = encodeURIComponent(priceOld);
+    const encodedDiscount = encodeURIComponent(discount);
     
-    const dynamicImageUrl = `${baseUrl}/api/og-image?title=${encodedTitle}&company=${encodedCompany}&priceNew=${encodedPriceNew}&priceOld=${encodedPriceOld}`;
-
-    // Generate HTML directly
+    const dynamicImageUrl = `${baseUrl}/api/og-image?name=${encodedName}&priceNew=${encodedPriceNew}&priceOld=${encodedPriceOld}&discount=${encodedDiscount}`;
+    
     const html = `
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">

@@ -4,12 +4,12 @@ import { Resvg } from '@resvg/resvg-js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const title = req.query.title as string || 'Pharma Core';
-    const company = req.query.company as string || 'شركة الأدوية';
-    const priceNew = req.query.priceNew as string || '---';
-    const priceOld = req.query.priceOld as string || '---';
+    const name = req.query.name as string || 'منتج طبي';
+    const priceNew = parseFloat(req.query.priceNew as string) || 0;
+    const priceOld = parseFloat(req.query.priceOld as string) || 0;
+    const discount = req.query.discount ? parseInt(req.query.discount as string) : 
+                    (priceOld > priceNew && priceOld > 0 ? Math.round(((priceOld - priceNew) / priceOld) * 100) : 0);
 
-    // Fetch a font that supports Arabic (Tajawal)
     const fontRes = await fetch('https://raw.githubusercontent.com/googlefonts/tajawal/main/fonts/ttf/Tajawal-Bold.ttf');
     const fontBuffer = await fontRes.arrayBuffer();
 
@@ -20,109 +20,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           dir: 'rtl',
           style: {
             display: 'flex',
-            flexDirection: 'column',
             width: '100%',
             height: '100%',
-            backgroundColor: '#0f172a',
-            color: 'white',
-            padding: '60px',
+            backgroundColor: '#f8fafc',
+            color: '#0f172a',
             fontFamily: 'Tajawal',
-            justifyContent: 'center',
             alignItems: 'center',
-            textAlign: 'center',
-            backgroundImage: 'radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 100%)',
+            justifyContent: 'center',
           },
           children: [
+            // Card
             {
               type: 'div',
               props: {
                 style: {
                   display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#2563eb',
-                  color: 'white',
-                  padding: '10px 30px',
-                  borderRadius: '40px',
-                  fontSize: '24px',
-                  fontWeight: 'bold',
-                  marginBottom: '40px',
-                },
-                children: 'عرض ترويجي حصري',
-              }
-            },
-            {
-              type: 'div',
-              props: {
-                style: {
-                  fontSize: '70px',
-                  fontWeight: 'bold',
-                  marginBottom: '20px',
-                  color: '#ffffff',
-                  lineHeight: 1.2,
-                  textAlign: 'center',
-                  maxWidth: '1000px',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                },
-                children: title,
-              }
-            },
-            {
-              type: 'div',
-              props: {
-                style: {
-                  fontSize: '40px',
-                  marginBottom: '60px',
-                  color: '#94a3b8',
-                },
-                children: company,
-              }
-            },
-            {
-              type: 'div',
-              props: {
-                style: {
-                  display: 'flex',
-                  justifyContent: 'center',
-                  gap: '40px',
-                  width: '100%',
+                  flexDirection: 'column',
+                  width: '900px',
+                  height: '450px',
+                  backgroundColor: 'white',
+                  borderRadius: '30px',
+                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+                  padding: '40px',
+                  position: 'relative',
                 },
                 children: [
+                  // Branding
                   {
                     type: 'div',
                     props: {
-                      style: {
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        border: '2px solid rgba(16, 185, 129, 0.2)',
-                        padding: '30px 50px',
-                        borderRadius: '30px',
-                      },
+                      style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' },
                       children: [
-                        { type: 'span', props: { style: { fontSize: '24px', color: '#34d399', marginBottom: '10px' }, children: 'السعر الجديد' } },
-                        { type: 'span', props: { style: { fontSize: '60px', fontWeight: 'bold', color: '#10b981' }, children: `${priceNew} ج.م` } }
+                        { type: 'span', props: { style: { fontSize: '24px', fontWeight: 'bold' }, children: 'PHARMA CORE' } },
+                        { type: 'span', props: { style: { fontSize: '14px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px' }, children: 'Premium' } }
                       ]
                     }
                   },
+                  // Badges
+                  {
+                    type: 'div',
+                    props: { style: { display: 'flex', gap: '10px', marginBottom: '20px' }, children: [
+                        { type: 'div', props: { style: { backgroundColor: '#fef2f2', color: '#ef4444', padding: '5px 15px', borderRadius: '8px', fontSize: '16px' }, children: 'Price Update 🔥' } },
+                        discount > 0 ? { type: 'div', props: { style: { backgroundColor: '#ef4444', color: 'white', padding: '5px 15px', borderRadius: '8px', fontSize: '16px' }, children: `-${discount}%` } } : {}
+                    ]}
+                  },
+                  // Product Name
+                  { type: 'h1', props: { style: { fontSize: '48px', fontWeight: 'bold', marginBottom: 'auto' }, children: name } },
+                  
+                  // Pricing
                   {
                     type: 'div',
                     props: {
-                      style: {
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        backgroundColor: 'rgba(148, 163, 184, 0.1)',
-                        border: '2px solid rgba(148, 163, 184, 0.2)',
-                        padding: '30px 50px',
-                        borderRadius: '30px',
-                      },
+                      style: { display: 'flex', alignItems: 'flex-end', gap: '20px' },
                       children: [
-                        { type: 'span', props: { style: { fontSize: '24px', color: '#94a3b8', marginBottom: '10px' }, children: 'السعر القديم' } },
-                        { type: 'span', props: { style: { fontSize: '60px', fontWeight: 'bold', color: '#64748b', textDecoration: 'line-through' }, children: `${priceOld} ج.م` } }
+                        { type: 'span', props: { style: { fontSize: '64px', fontWeight: 'bold', color: '#10b981' }, children: `${priceNew} ج.م` } },
+                        priceOld > priceNew ? { type: 'span', props: { style: { fontSize: '32px', color: '#94a3b8', textDecoration: 'line-through', marginBottom: '10px' }, children: `${priceOld} ج.م` } } : {}
                       ]
                     }
                   }
@@ -135,32 +87,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       {
         width: 1200,
         height: 630,
-        fonts: [
-          {
-            name: 'Tajawal',
-            data: fontBuffer,
-            weight: 700,
-            style: 'normal',
-          },
-        ],
+        fonts: [{ name: 'Tajawal', data: fontBuffer, weight: 700, style: 'normal' }],
       }
     );
 
-    const resvg = new Resvg(svg, {
-      background: 'rgba(15, 23, 42, 1)',
-      fitTo: {
-        mode: 'width',
-        value: 1200,
-      },
-    });
-    const pngData = resvg.render();
-    const pngBuffer = pngData.asPng();
-
+    const resvg = new Resvg(svg, { background: 'transparent', fitTo: { mode: 'width', value: 1200 } });
     res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.send(pngBuffer);
+    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
+    res.send(resvg.render().asPng());
   } catch (error) {
-    console.error('Error generating OG image:', error);
-    res.status(500).send('Error generating image');
+    console.error('Error generating modern OG image:', error);
+    res.status(500).send('Error generating prompt image');
   }
 }
