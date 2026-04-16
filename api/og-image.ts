@@ -22,62 +22,75 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             display: 'flex',
             width: '100%',
             height: '100%',
-            backgroundColor: '#f8fafc',
-            color: '#0f172a',
+            backgroundImage: 'linear-gradient(135deg, #1e1b4b 0%, #4c1d95 50%, #7e22ce 100%)',
+            color: 'white',
             fontFamily: 'Tajawal',
-            alignItems: 'center',
-            justifyContent: 'center',
+            padding: '40px',
+            flexDirection: 'column',
           },
           children: [
-            // Card
+            // Top: Branding
+            {
+              type: 'div',
+              props: {
+                style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+                children: [
+                    { type: 'div', props: { style: { fontSize: '32px', fontWeight: 'bold', letterSpacing: '-1px' }, children: 'PHARMA CORE' } },
+                    { type: 'div', props: { style: { backgroundColor: '#ef4444', color: 'white', padding: '8px 20px', borderRadius: '50px', fontSize: '20px', fontWeight: 'bold' }, children: '🔥 تحديث سعر' } }
+                ]
+              }
+            },
+            // Center: Product Name
             {
               type: 'div',
               props: {
                 style: {
                   display: 'flex',
-                  flexDirection: 'column',
-                  width: '900px',
-                  height: '450px',
-                  backgroundColor: 'white',
-                  borderRadius: '30px',
-                  boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-                  padding: '40px',
-                  position: 'relative',
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '20px'
+                },
+                children: { 
+                  type: 'h1', 
+                  props: { 
+                    style: { fontSize: '72px', fontWeight: 'bold', textAlign: 'center', lineHeight: '1.1' }, 
+                    children: name 
+                  } 
+                }
+              }
+            },
+            // Bottom: Pricing Section
+            {
+              type: 'div',
+              props: {
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '40px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  padding: '30px',
+                  borderRadius: '25px',
                 },
                 children: [
-                  // Branding
-                  {
-                    type: 'div',
-                    props: {
-                      style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' },
+                  { 
+                    type: 'div', 
+                    props: { 
+                      style: { display: 'flex', alignItems: 'center', gap: '15px', textShadow: '0 4px 10px rgba(0,0,0,0.3)' },
                       children: [
-                        { type: 'span', props: { style: { fontSize: '24px', fontWeight: 'bold' }, children: 'PHARMA CORE' } },
-                        { type: 'span', props: { style: { fontSize: '14px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px' }, children: 'Premium' } }
+                        { type: 'span', props: { style: { fontSize: '80px', fontWeight: 'bold', color: '#22c55e' }, children: `${priceNew} ج.م` } },
+                        priceOld > priceNew ? { type: 'span', props: { style: { fontSize: '40px', color: '#94a3b8', textDecoration: 'line-through' }, children: `${priceOld} ج.م` } } : {}
                       ]
-                    }
+                    } 
                   },
-                  // Badges
-                  {
-                    type: 'div',
-                    props: { style: { display: 'flex', gap: '10px', marginBottom: '20px' }, children: [
-                        { type: 'div', props: { style: { backgroundColor: '#fef2f2', color: '#ef4444', padding: '5px 15px', borderRadius: '8px', fontSize: '16px' }, children: 'Price Update 🔥' } },
-                        discount > 0 ? { type: 'div', props: { style: { backgroundColor: '#ef4444', color: 'white', padding: '5px 15px', borderRadius: '8px', fontSize: '16px' }, children: `-${discount}%` } } : {}
-                    ]}
-                  },
-                  // Product Name
-                  { type: 'h1', props: { style: { fontSize: '48px', fontWeight: 'bold', marginBottom: 'auto' }, children: name } },
-                  
-                  // Pricing
-                  {
-                    type: 'div',
-                    props: {
-                      style: { display: 'flex', alignItems: 'flex-end', gap: '20px' },
-                      children: [
-                        { type: 'span', props: { style: { fontSize: '64px', fontWeight: 'bold', color: '#10b981' }, children: `${priceNew} ج.م` } },
-                        priceOld > priceNew ? { type: 'span', props: { style: { fontSize: '32px', color: '#94a3b8', textDecoration: 'line-through', marginBottom: '10px' }, children: `${priceOld} ج.م` } } : {}
-                      ]
-                    }
-                  }
+                  discount > 0 ? { 
+                    type: 'div', 
+                    props: { 
+                      style: { backgroundColor: '#ef4444', color: 'white', padding: '15px 30px', borderRadius: '15px', fontSize: '40px', fontWeight: 'bold', transform: 'rotate(-5deg)' }, 
+                      children: `وفر ${discount}%` 
+                    } 
+                  } : {}
                 ]
               }
             }
@@ -96,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=3600');
     res.send(resvg.render().asPng());
   } catch (error) {
-    console.error('Error generating modern OG image:', error);
-    res.status(500).send('Error generating prompt image');
+    console.error('Error generating high-converting OG image:', error);
+    res.status(500).send('Error generating Ad image');
   }
 }
