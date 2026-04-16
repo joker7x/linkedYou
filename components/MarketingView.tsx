@@ -85,7 +85,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
   };
 
   const copyLink = (id: string) => {
-    const url = `${window.location.origin}/?promo=${id}`;
+    const url = `${window.location.origin}/offer/${id}?v=${Date.now()}`;
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
