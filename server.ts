@@ -195,7 +195,7 @@ async function startServer() {
     const MEDHOME_API_URL = "https://dwaprices.com/api_dr88g/serverz.php";
     
     try {
-      const bodyData = search ? `searchForFlutter=${encodeURIComponent(search)}` : `lastpricesForFlutter=${offset || 0}`;
+      const bodyData = `lastpricesForFlutter=${offset || 0}${search ? `&searchForFlutter=${encodeURIComponent(search)}` : ''}`;
       console.log(`Proxying request to ${MEDHOME_API_URL} with body ${bodyData}`);
       const response = await fetch(MEDHOME_API_URL, {
         method: 'POST',
@@ -212,8 +212,18 @@ async function startServer() {
         return res.status(response.status).json({ error: `API Error: ${response.status}`, details: text });
       }
 
-      const data = await response.json();
-      res.json(data);
+      const text = await response.text();
+      if (!text || text.trim() === '') {
+        return res.json([]);
+      }
+
+      try {
+        const data = JSON.parse(text);
+        res.json(data);
+      } catch (e) {
+        console.error("JSON Parse Error:", e, "Text:", text);
+        res.status(500).json({ error: "Invalid JSON from external API", details: text });
+      }
     } catch (error) {
       console.error("Proxy Error:", error);
       res.status(500).json({ error: "Failed to fetch from external API", details: error instanceof Error ? error.message : String(error) });
