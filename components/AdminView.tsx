@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { AdminConfig } from '../types.ts';
 import { getAllUsers, updateGlobalConfig, getAllPostsAdmin, adminDeletePost, updateUserPermissions } from '../services/supabase.ts';
+import { ADMIN_ID } from '../constants.ts';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
@@ -614,11 +615,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                       ].map(status => {
                         const currentStatus = selectedUserForEdit.device_info?.ban_status || 'none';
                         const isActive = currentStatus === status.id;
+                        const isSuperAdmin = Number(selectedUserForEdit.id) === ADMIN_ID;
                         
                         return (
                           <button 
                             key={status.id}
+                            disabled={isSuperAdmin && status.id !== 'none'}
                             onClick={async () => {
+                              if (isSuperAdmin && status.id !== 'none') return;
                               // If clicking the same non-none status, toggle back to none
                               const nextStatus = (isActive && status.id !== 'none') ? 'none' : status.id;
                               const updates: any = { ban_status: nextStatus };
@@ -661,13 +665,16 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                         <input 
                           id="items_limit_input"
                           type="number" 
+                          disabled={Number(selectedUserForEdit.id) === ADMIN_ID}
                           defaultValue={selectedUserForEdit.device_info?.items_limit || 100}
-                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 pr-12 text-sm font-black outline-none focus:border-blue-500 transition-all"
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 pr-12 text-sm font-black outline-none focus:border-blue-500 transition-all disabled:opacity-50"
                         />
                         <Package size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
                       </div>
                       <button 
+                        disabled={Number(selectedUserForEdit.id) === ADMIN_ID}
                         onClick={async () => {
+                          if (Number(selectedUserForEdit.id) === ADMIN_ID) return;
                           const input = document.getElementById('items_limit_input') as HTMLInputElement;
                           const val = parseInt(input?.value);
                           if (!isNaN(val)) {
@@ -703,11 +710,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                     ].map(page => {
                       const restrictedPages = selectedUserForEdit.device_info?.restricted_pages || [];
                       const isRestricted = Array.isArray(restrictedPages) && restrictedPages.includes(page.id);
+                      const isSuperAdmin = Number(selectedUserForEdit.id) === ADMIN_ID;
                       
                       return (
                         <button 
                           key={page.id}
+                          disabled={isSuperAdmin}
                           onClick={async () => {
+                            if (isSuperAdmin) return;
                             const current = Array.isArray(restrictedPages) ? [...restrictedPages] : [];
                             const next = isRestricted 
                               ? current.filter((p: string) => p !== page.id) 

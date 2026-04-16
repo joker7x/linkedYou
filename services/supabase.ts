@@ -356,6 +356,8 @@ export const getPosts = async (userId: string): Promise<any[]> => {
     .not('content', 'ilike', '__COMMENT__%')
     .not('content', 'ilike', '__LIKE__%')
     .not('content', 'ilike', '__PROFILE__%')
+    .not('content', 'ilike', '__TRUST__%')
+    .not('content', 'ilike', '__ADMIN_TRUST__%')
     .order('created_at', { ascending: false });
   
   if (error) {

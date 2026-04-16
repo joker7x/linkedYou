@@ -345,7 +345,8 @@ const App: React.FC = () => {
     }
 
     const restrictedPages = currentUser?.device_info?.restricted_pages || [];
-    const isRestricted = Array.isArray(restrictedPages) && restrictedPages.includes(currentView);
+    const isSuperAdmin = Number(currentUser?.id) === ADMIN_ID;
+    const isRestricted = !isSuperAdmin && Array.isArray(restrictedPages) && restrictedPages.includes(currentView);
     
     if (isRestricted && !isAdmin) {
       return (
