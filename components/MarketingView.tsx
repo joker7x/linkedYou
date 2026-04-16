@@ -7,7 +7,8 @@ import {
   MessageCircle, Send, Users, MapPin, Bot, RefreshCw
 } from 'lucide-react';
 import { Drug, PromoLink, PromoVisit } from '../types.ts';
-import { createPromoLink, getPromoStats, searchDrugs, deletePromoLink } from '../services/supabase.ts';
+import { createPromoLink, getPromoStats, deletePromoLink } from '../services/supabase.ts';
+import { searchDrugsAPI } from '../services/api.ts';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell 
@@ -48,7 +49,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
   const handleSearch = async (q: string) => {
     setSearchQuery(q);
     if (q.length > 2) {
-      const results = await searchDrugs(q);
+      const results = await searchDrugsAPI(q);
       setSearchResults(results);
     } else {
       setSearchResults([]);

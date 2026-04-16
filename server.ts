@@ -191,17 +191,18 @@ async function startServer() {
   // API Proxy for Medhome
   app.post("/api/proxy/medhome", async (req, res) => {
     console.log("Proxy endpoint hit");
-    const { offset } = req.body;
+    const { offset, search } = req.body;
     const MEDHOME_API_URL = "https://dwaprices.com/api_dr88g/serverz.php";
     
     try {
-      console.log(`Proxying request to ${MEDHOME_API_URL} with offset ${offset}`);
+      const bodyData = search ? `searchForFlutter=${encodeURIComponent(search)}` : `lastpricesForFlutter=${offset || 0}`;
+      console.log(`Proxying request to ${MEDHOME_API_URL} with body ${bodyData}`);
       const response = await fetch(MEDHOME_API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
         },
-        body: `lastpricesForFlutter=${offset}`
+        body: bodyData
       });
 
       console.log(`External API response status: ${response.status}`);

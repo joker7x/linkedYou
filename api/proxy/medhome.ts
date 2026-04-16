@@ -5,16 +5,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { offset } = req.body;
+  const { offset, search } = req.body;
   const MEDHOME_API_URL = "https://dwaprices.com/api_dr88g/serverz.php";
 
   try {
+    const bodyData = search ? `searchForFlutter=${encodeURIComponent(search)}` : `lastpricesForFlutter=${offset || 0}`;
+    
     const response = await fetch(MEDHOME_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
       },
-      body: `lastpricesForFlutter=${offset}`
+      body: bodyData
     });
 
     if (!response.ok) {
