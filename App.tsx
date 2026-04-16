@@ -188,9 +188,16 @@ const App: React.FC = () => {
     const result = Array.from(uniqueMap.values());
     
     // Apply items limit if restricted
-    const limit = currentUser?.device_info?.items_limit || 100;
-    return result.slice(0, limit);
-  }, [allDrugs, mode, search, currentUser]);
+    const isSuperAdmin = Number(currentUser?.id) === ADMIN_ID;
+    if (isAdmin || isSuperAdmin) return result;
+
+    const explicitLimit = currentUser?.device_info?.items_limit;
+    if (explicitLimit && !isNaN(Number(explicitLimit))) {
+      return result.slice(0, Number(explicitLimit));
+    }
+    
+    return result;
+  }, [allDrugs, mode, search, currentUser, isAdmin]);
 
   const fetchNextBatch = useCallback(async () => {
     if (isFetching || !config.liveSync) return;
