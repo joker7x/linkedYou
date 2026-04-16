@@ -184,3 +184,26 @@ export interface AppNotification {
   message: string;
   timestamp: string;
 }
+
+export interface PromoLink {
+  id: string;
+  drug_no: string;
+  bot_username: string;
+  channel_link?: string;
+  created_at: string;
+  created_by: string;
+  title?: string;
+  description?: string;
+}
+
+export interface PromoVisit {
+  id: string;
+  link_id: string;
+  timestamp: string;
+  country?: string;
+  device?: string;
+  platform?: string;
+  ip?: string;
+  user_agent?: string;
+  referrer?: string;
+}

@@ -1,9 +1,38 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY, MAIN_TABLE, BOT_USERNAME } from '../constants.ts';
-import { Drug } from '../types.ts';
+import { Drug, PromoLink, PromoVisit } from '../types.ts';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+export const createPromoLink = async (link: Omit<PromoLink, 'id' | 'created_at'>) => {
+  const id = Math.random().toString(36).substring(2, 10);
+  const { data, error } = await supabase.from('promo_links').insert({
+    id,
+    ...link,
+    created_at: new Date().toISOString()
+  }).select().single();
+  return { data, error };
+};
+
+export const getPromoLink = async (id: string) => {
+  const { data, error } = await supabase.from('promo_links').select('*').eq('id', id).single();
+  return { data, error };
+};
+
+export const logPromoVisit = async (visit: Omit<PromoVisit, 'id' | 'timestamp'>) => {
+  const { error } = await supabase.from('promo_tracking').insert({
+    ...visit,
+    timestamp: new Date().toISOString()
+  });
+  return !error;
+};
+
+export const getPromoStats = async () => {
+  const { data: links, error: linksError } = await supabase.from('promo_links').select('*');
+  const { data: visits, error: visitsError } = await supabase.from('promo_tracking').select('*');
+  return { links: links || [], visits: visits || [], error: linksError || visitsError };
+};
 
 export const logSession = async (userId: string, duration: number, deviceType: string) => {
   const { error } = await supabase.from('user_sessions').insert({

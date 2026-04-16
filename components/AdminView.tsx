@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MarketingView } from './MarketingView.tsx';
 import { 
   ShieldCheck, ArrowRight, Activity, Database, Users, Sparkles, Globe, Construction, Bell, Send, 
   Bot, RefreshCw, Terminal, Settings as SettingsIcon, ShieldAlert, Coins, History, Ban, Lock, Unlock, 
   Save, AlertTriangle, Fingerprint, Eye, Zap, HeartPulse, CheckCircle2, ChevronLeft, Trash2, MessageSquare,
-  Search, Filter, ExternalLink, User, Package
+  Search, Filter, ExternalLink, User, Package, TrendingUp
 } from 'lucide-react';
 import { AdminConfig } from '../types.ts';
 import { getAllUsers, updateGlobalConfig, getAllPostsAdmin, adminDeletePost, updateUserPermissions } from '../services/supabase.ts';
@@ -42,7 +43,7 @@ const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab }: any) => {
 };
 
 export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config, onUpdateConfig, currentUser }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'moderation' | 'system'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'moderation' | 'system' | 'marketing'>('dashboard');
   const [users, setUsers] = useState<any[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -176,6 +177,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
             <TabButton id="users" label="المستخدمين" icon={Users} activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton id="moderation" label="المحتوى" icon={ShieldAlert} activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton id="system" label="النظام" icon={Terminal} activeTab={activeTab} setActiveTab={setActiveTab} />
+            <TabButton id="marketing" label="التسويق" icon={TrendingUp} activeTab={activeTab} setActiveTab={setActiveTab} />
           </div>
         </div>
       </div>
@@ -418,6 +420,13 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                   </div>
                 )}
               </div>
+            </motion.div>
+          )}
+
+          {/* MARKETING TAB */}
+          {activeTab === 'marketing' && (
+            <motion.div key="marketing" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+              <MarketingView currentUser={currentUser} />
             </motion.div>
           )}
 

@@ -15,6 +15,7 @@ import { CommunityView } from './components/CommunityView.tsx';
 import { UserProfileView } from './components/UserProfileView.tsx';
 import { StockAnalytics } from './components/StockAnalytics.tsx';
 import { ShortagesView } from './components/ShortagesView.tsx';
+import { PromoView } from './components/PromoView.tsx';
 import { getGlobalConfig, syncTelegramUser, logSession, getUserProfile, checkUserBan, supabase } from './services/supabase.ts';
 import { ADMIN_ID } from './constants.ts';
 
@@ -42,6 +43,15 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('favorites');
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
+  const [promoId, setPromoId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const promo = params.get('promo');
+    if (promo) {
+      setPromoId(promo);
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('favorites', JSON.stringify(Array.from(favorites)));
@@ -502,7 +512,7 @@ const App: React.FC = () => {
                 <>
                   {filteredDrugs.map((drug, idx) => (
                     <DrugCard 
-                      key={drug.drug_no} 
+                      key={`${drug.drug_no}-${idx}`} 
                       drug={drug} 
                       index={idx} 
                       isFavorite={favorites.has(drug.drug_no)} 
@@ -557,6 +567,11 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 selection:bg-blue-500/20 dark:selection:bg-blue-500/30 overflow-x-hidden transition-colors duration-300">
+      <AnimatePresence>
+        {promoId && (
+          <PromoView promoId={promoId} onClose={() => setPromoId(null)} />
+        )}
+      </AnimatePresence>
       <MDiv key={currentView} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="w-full">
         {renderView()}
       </MDiv>
