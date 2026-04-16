@@ -1,5 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { SUPABASE_URL, SUPABASE_KEY, MAIN_TABLE } from '../constants.ts';
+import * as constants from '../constants.ts';
+
+// Safely access constants with fallbacks
+const SUPABASE_URL = constants.SUPABASE_URL || '';
+const SUPABASE_KEY = constants.SUPABASE_KEY || '';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const promoId = req.query.promo as string;
@@ -12,34 +16,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let discount = 0;
 
   try {
-    if (promoId) {
+    if (promoId && SUPABASE_URL && SUPABASE_KEY) {
       const promoRes = await fetch(`${SUPABASE_URL}/rest/v1/promo_links?id=eq.${promoId}&select=*`, {
         headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
       });
-      const promoData = await promoRes.json();
       
-      // Safety check: Ensure we got an array
-      if (Array.isArray(promoData) && promoData.length > 0) {
-        const promo = promoData[0];
-        title = promo.title || title;
+      if (promoRes.ok) {
+        const promoData = await promoRes.json();
         
-        // Take price data directly from the promo record, with safety checks
-        priceNew = promo.price_new ? String(promo.price_new) : "";
-        priceOld = promo.price_old ? String(promo.price_old) : "";
-        
-        const n = parseFloat(priceNew);
-        const o = parseFloat(priceOld);
-        if (!isNaN(n) && !isNaN(o) && o > 0 && o > n) {
-          discount = Math.round(((o - n) / o) * 100);
+        // Safety check: Ensure we got an array
+        if (Array.isArray(promoData) && promoData.length > 0) {
+          const promo = promoData[0];
+          title = promo.title || title;
+          
+          // Take price data directly from the promo record, with safety checks
+          priceNew = promo.price_new ? String(promo.price_new) : "";
+          priceOld = promo.price_old ? String(promo.price_old) : "";
+          
+          const n = parseFloat(priceNew);
+          const o = parseFloat(priceOld);
+          if (!isNaN(n) && !isNaN(o) && o > 0 && o > n) {
+            discount = Math.round(((o - n) / o) * 100);
+          }
+          description = (priceNew && priceOld) ? `السعر الجديد: ${priceNew} ج.م بدلاً من ${priceOld} ج.م` : description;
         }
-        description = (priceNew && priceOld) ? `السعر الجديد: ${priceNew} ج.م بدلاً من ${priceOld} ج.م` : description;
-      } else {
-        console.error('Promo link data empty or not array:', promoData);
       }
     }
   } catch (error) {
     console.error('Data fetch error (using defaults):', error);
   }
+
 
   const host = req.headers.host;
   const protocol = req.headers['x-forwarded-proto'] || 'https';
