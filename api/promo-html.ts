@@ -55,20 +55,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const protocol = req.headers['x-forwarded-proto'] || 'https';
     const baseUrl = `${protocol}://${host}`;
 
-    // Fetch index.html from the deployed site
-    let html = '';
-    try {
-      const htmlRes = await fetch(`${baseUrl}/index.html`);
-      html = await htmlRes.text();
-    } catch (e) {
-      console.error('Failed to fetch index.html:', e);
-      return res.status(500).send('Internal Server Error');
-    }
-    
-    // Replace OG tags
-    html = html.replace(/<meta property="og:title" content="[^"]*" \/>/g, `<meta property="og:title" content="${title}" />`);
-    html = html.replace(/<meta property="og:description" content="[^"]*" \/>/g, `<meta property="og:description" content="${description}" />`);
-    
     // Use dynamic OG image endpoint
     const encodedTitle = encodeURIComponent(title);
     const encodedCompany = encodeURIComponent(company);
@@ -76,9 +62,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const encodedPriceOld = encodeURIComponent(priceOld);
     
     const dynamicImageUrl = `${baseUrl}/api/og-image?title=${encodedTitle}&company=${encodedCompany}&priceNew=${encodedPriceNew}&priceOld=${encodedPriceOld}`;
-    
-    html = html.replace(/<meta property="og:image" content="[^"]*" \/>/g, `<meta property="og:image" content="${dynamicImageUrl}" />`);
-    html = html.replace(/<meta name="twitter:image" content="[^"]*" \/>/g, `<meta name="twitter:image" content="${dynamicImageUrl}" />`);
+
+    // Generate HTML directly
+    const html = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${title}</title>
+  <meta property="og:title" content="${title}" />
+  <meta property="og:description" content="${description}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="${dynamicImageUrl}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="${dynamicImageUrl}" />
+  <meta http-equiv="refresh" content="0;url=${baseUrl}/?promo=${promoId}" />
+</head>
+<body>
+  <script>window.location.href = "${baseUrl}/?promo=${promoId}";</script>
+</body>
+</html>
+    `;
     
     res.setHeader('Content-Type', 'text/html');
     res.setHeader('Cache-Control', 'public, max-age=60');
