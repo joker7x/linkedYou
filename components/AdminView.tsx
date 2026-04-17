@@ -197,9 +197,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                 <StatCard icon={Activity} label="حالة النظام" value="مستقر" color="amber" />
               </div>
 
-              <div className="grid grid-cols-1 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* System Health */}
-                <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="flex items-center justify-between mb-8">
                     <h3 className="text-xl font-black text-slate-900 dark:text-white">أداء النظام</h3>
                     <div className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-black rounded-full uppercase tracking-widest">مستقر</div>
@@ -208,6 +208,17 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                     <ProgressBar label="استهلاك قاعدة البيانات" percentage={12} color="bg-blue-500" />
                     <ProgressBar label="استهلاك الذاكرة (RAM)" percentage={45} color="bg-indigo-500" />
                     <ProgressBar label="معدل الاستجابة (API)" percentage={8} color="bg-emerald-500" />
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <h3 className="text-lg font-black mb-6 text-slate-900 dark:text-white">إجراءات سريعة</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <QuickAction icon={RefreshCw} label="مزامنة" />
+                    <QuickAction icon={ShieldAlert} label="فحص" />
+                    <QuickAction icon={Database} label="نسخ" />
+                    <QuickAction icon={SettingsIcon} label="إعدادات" />
                   </div>
                 </div>
               </div>
@@ -451,6 +462,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                     active={config.liveSync} 
                     onClick={() => saveConfig({liveSync: !config.liveSync})} 
                     color="blue"
+                  />
+                  <SystemAction 
+                    label="التحليل بالذكاء الاصطناعي" 
+                    description="تفعيل ميزات AI في البحث والتحليل" 
+                    icon={Bot} 
+                    active={config.aiAnalysis} 
+                    onClick={() => saveConfig({aiAnalysis: !config.aiAnalysis})} 
+                    color="indigo"
                   />
                   <SystemAction 
                     label="الوضع الصارم (Strict Mode)" 
@@ -833,7 +852,7 @@ const SystemAction = ({ label, description, icon: Icon, active, onClick, color =
       </div>
       <div className={`w-12 h-6 rounded-full p-1 transition-all flex items-center shrink-0 ${active ? colorMap[color] : 'bg-slate-200 dark:bg-slate-700'}`}>
         <motion.div 
-          animate={{ x: active ? -24 : 0 }} 
+          animate={{ x: active ? 24 : 0 }} 
           transition={{ type: 'spring', stiffness: 500, damping: 30 }} 
           className="w-4 h-4 bg-white rounded-full shadow-md" 
         />

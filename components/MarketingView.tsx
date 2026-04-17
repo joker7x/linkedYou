@@ -7,8 +7,7 @@ import {
   MessageCircle, Send, Users, MapPin, Bot, RefreshCw
 } from 'lucide-react';
 import { Drug, PromoLink, PromoVisit } from '../types.ts';
-import { createPromoLink, getPromoStats, deletePromoLink } from '../services/supabase.ts';
-import { searchDrugsAPI } from '../services/api.ts';
+import { createPromoLink, getPromoStats, searchDrugs, deletePromoLink } from '../services/supabase.ts';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart, Pie, Cell 
@@ -49,7 +48,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
   const handleSearch = async (q: string) => {
     setSearchQuery(q);
     if (q.length > 2) {
-      const results = await searchDrugsAPI(q);
+      const results = await searchDrugs(q);
       setSearchResults(results);
     } else {
       setSearchResults([]);
@@ -70,9 +69,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
       channel_link: channelLink,
       created_by: String(currentUser?.id || 'admin'),
       title: selectedDrug.name_ar || selectedDrug.name_en || 'بدون اسم',
-      description: `سعر جديد: ${selectedDrug.price_new || 0} ج.م`,
-      price_new: selectedDrug.price_new,
-      price_old: selectedDrug.price_old
+      description: `سعر جديد: ${selectedDrug.price_new || 0} ج.م`
     });
     
     if (data) {
@@ -87,7 +84,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
   };
 
   const copyLink = (id: string) => {
-    const url = `${window.location.origin}/offer/${id}?v=${Date.now()}`;
+    const url = `${window.location.origin}/?promo=${id}`;
     navigator.clipboard.writeText(url);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);

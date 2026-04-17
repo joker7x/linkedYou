@@ -62,41 +62,6 @@ export const fetchDrugBatchFromAPI = async (offset: number): Promise<Drug[]> => 
 };
 
 /**
- * البحث عن الأدوية عبر API Medhome
- * @param query نص البحث
- */
-export const searchDrugsAPI = async (query: string): Promise<Drug[]> => {
-  if (!query || query.trim().length < 2) return [];
-  
-  try {
-    const response = await fetch('/api/proxy/medhome', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ search: query.trim() })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`API Proxy Error: ${response.status} - ${errorText}`);
-      return [];
-    }
-
-    const data = await response.json();
-    
-    if (Array.isArray(data)) {
-      return data.map(mapExternalToDrug);
-    }
-    
-    return [];
-  } catch (e) {
-    console.error("Critical API Search Error:", e);
-    return [];
-  }
-};
-
-/**
  * حساب الإحصائيات العامة بناءً على البيانات المستلمة
  */
 export const fetchAdminStats = (drugs: Drug[]): AdminStats => {
