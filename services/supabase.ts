@@ -360,6 +360,34 @@ export const updateUserPermissions = async (userId: number, updates: any): Promi
   }
 };
 
+export const syncDrugPrice = async (drugNo: string, newPrice: number) => {
+  try {
+    // 1. Get current drug to check price
+    const { data: currentDrug, error: fetchError } = await supabase
+      .from(MAIN_TABLE)
+      .select('price_new')
+      .eq('drug_no', drugNo)
+      .maybeSingle();
+
+    if (fetchError || !currentDrug) return;
+
+    // 2. If price changed, update drug and add to history
+    if (currentDrug.price_new !== newPrice) {
+      // Add to history
+      await supabase.from('price_history').insert({
+        drug_no: drugNo,
+        price: newPrice,
+        created_at: new Date().toISOString()
+      });
+      
+      // Update main table
+      await supabase.from(MAIN_TABLE).update({ price_new: newPrice }).eq('drug_no', drugNo);
+    }
+  } catch (err) {
+    console.error("Error in syncDrugPrice:", err);
+  }
+};
+
 export const checkUserBan = (user: any): { isBanned: boolean; reason?: string; until?: string } => {
   if (!user?.device_info) return { isBanned: false };
   const { ban_status, ban_until } = user.device_info;

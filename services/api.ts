@@ -1,6 +1,7 @@
 
 import { MEDHOME_API_URL } from '../constants.ts';
 import { Drug, ExternalDrugItem, AdminStats } from '../types.ts';
+import { syncDrugPrice } from './supabase.ts';
 
 /**
  * دالة تحويل البيانات من الصيغة الخارجية لـ Medhome إلى صيغة Pharma Core
@@ -51,7 +52,16 @@ export const fetchDrugBatchFromAPI = async (offset: number): Promise<Drug[]> => 
     const data = await response.json();
     
     if (Array.isArray(data)) {
-      return data.map(mapExternalToDrug);
+      const drugs = data.map(mapExternalToDrug);
+      
+      // Update prices in database
+      drugs.forEach(drug => {
+        if (drug.price_new !== null) {
+          syncDrugPrice(drug.drug_no, drug.price_new);
+        }
+      });
+      
+      return drugs;
     }
     
     return [];
