@@ -69,7 +69,7 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
       channel_link: channelLink,
       created_by: String(currentUser?.id || 'admin'),
       title: selectedDrug.name_ar || selectedDrug.name_en || 'بدون اسم',
-      description: `سعر جديد: ${selectedDrug.price_new || 0} ج.م`
+      description: `السعر القديم: ${selectedDrug.price_old || 0} ج.م | السعر الجديد: ${selectedDrug.price_new || 0} ج.م`
     });
     
     if (data) {
@@ -193,7 +193,10 @@ export const MarketingView: React.FC<MarketingViewProps> = ({ currentUser }) => 
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-800">
                   <div className="text-xs font-black text-blue-600 mb-1">تم اختيار:</div>
                   <div className="text-sm font-bold">{selectedDrug.name_ar || selectedDrug.name_en}</div>
-                  <div className="text-xs text-blue-500 mt-1">السعر: {selectedDrug.price_new} ج.م</div>
+                  <div className="flex gap-4 mt-2">
+                    <div className="text-xs text-rose-500">السعر القديم: {selectedDrug.price_old} ج.م</div>
+                    <div className="text-xs text-emerald-600">السعر الجديد: {selectedDrug.price_new} ج.م</div>
+                  </div>
                 </motion.div>
               )}
 
