@@ -55,11 +55,11 @@ export const fetchDrugBatchFromAPI = async (offset: number): Promise<Drug[]> => 
       const drugs = data.map(mapExternalToDrug);
       
       // Update prices in database
-      drugs.forEach(drug => {
-        if (drug.price_new !== null) {
-          syncDrugPrice(drug.drug_no, drug.price_new);
-        }
-      });
+      await Promise.all(
+        drugs
+          .filter(drug => drug.price_new !== null)
+          .map(drug => syncDrugPrice(drug.drug_no, drug.price_new!))
+      );
       
       return drugs;
     }

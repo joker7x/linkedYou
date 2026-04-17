@@ -559,23 +559,45 @@ const App: React.FC = () => {
         </AnimatePresence>
         
         {!promoId && (
-          <>
-            <div className="w-24 h-24 rounded-[32px] bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 mb-8">
-              <Lock size={48} strokeWidth={2.5} />
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full max-w-lg bg-white dark:bg-slate-900 p-8 rounded-[40px] shadow-2xl border border-slate-100 dark:border-slate-800"
+          >
+            <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center text-white mb-8 mx-auto shadow-xl shadow-blue-500/20">
+              <ShieldCheck size={40} strokeWidth={2.5} />
             </div>
-            <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-4 tracking-tight">الدخول محظور</h1>
-            <p className="text-slate-500 dark:text-slate-400 font-bold mb-8 max-w-xs leading-relaxed">
-              عذراً، هذا التطبيق مخصص للعمل حصرياً داخل منصة تليجرام. يرجى فتح التطبيق من خلال البوت الرسمي.
+            
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-4 tracking-tight">PHARMA <span className="text-blue-600">CORE</span></h1>
+            <p className="text-slate-500 dark:text-slate-400 font-bold mb-8 leading-relaxed">
+              منصتك المتكاملة لمتابعة أحدث تحديثات أسعار الأدوية، وحالة النواقص في السوق المصري بشكل لحظي ودقيق.
             </p>
-            <div className="flex flex-col gap-4 w-full max-w-xs">
-              <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-right">
-                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">لماذا يظهر هذا؟</div>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold leading-relaxed">
-                  نحن نستخدم نظام التحقق من الهوية الخاص بتليجرام لضمان أمان بياناتك وتوفير تجربة مخصصة لك.
-                </p>
-              </div>
+
+            <div className="grid grid-cols-1 gap-4 text-right mb-10">
+              {[
+                { icon: Zap, title: 'تحديثات أسعار لحظية', desc: 'كن أول من يعرف بتغييرات أسعار الأدوية.' },
+                { icon: Package2, title: 'متابعة النواقص', desc: 'ابحث عن الأدوية المتوفرة في السوق.' },
+                { icon: LayoutGrid, title: 'تحليلات ذكية', desc: 'تقارير وتحليلات لمساعدتك في اتخاذ القرار.' },
+              ].map((feature, i) => (
+                <div key={i} className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
+                  <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                    <feature.icon size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900 dark:text-white">{feature.title}</h3>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold">{feature.desc}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          </>
+
+            <a 
+              href="https://t.me/PHARMA_CORE_BOT" // استبدلها برابط البوت الفعلي
+              className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-sm active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              افتح التطبيق عبر تليجرام <ExternalLink size={16} />
+            </a>
+          </motion.div>
         )}
       </div>
     );
