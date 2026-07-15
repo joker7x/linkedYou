@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ArrowRight, Award, CheckCircle2, MapPin, Briefcase, 
+  ArrowRight, Award, MapPin, Briefcase, 
   GraduationCap, Sparkles, MessageSquare, Edit3, Save, 
   X, Camera, Building2, Phone, ShieldCheck, ThumbsUp
 } from 'lucide-react';
+import { VerifiedBadge } from './VerifiedBadge.tsx';
 import { CommunityUser } from '../types.ts';
 import { Avatar } from './Avatar.tsx';
 import { AvatarPicker } from './AvatarPicker.tsx';
@@ -102,15 +103,23 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({ user: initialU
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent" />
         
         <div className="relative inline-block mb-4">
-          <div className={`w-28 h-28 mx-auto rounded-full bg-gradient-to-br ${getLevelColor(initialUser.level)} p-[3px]`}>
+          <div className={`w-28 h-28 mx-auto rounded-full bg-gradient-to-br ${getLevelColor(initialUser.level)} p-[3px] shadow-lg shadow-blue-500/5`}>
             <div className="w-full h-full bg-white dark:bg-slate-900 rounded-full flex items-center justify-center overflow-hidden">
               <Avatar name={formData.avatarId || 'avatar_m_01'} size={100} />
             </div>
           </div>
+          
+          {/* Verification Badge on Avatar Frame */}
+          {(formData.isVerified || initialUser.isVerified) && !isEditing && (
+            <div className="absolute bottom-1 right-1 z-20">
+              <VerifiedBadge size={22} />
+            </div>
+          )}
+
           {isEditing && (
             <button 
               onClick={() => setShowAvatarPicker(true)}
-              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg border-2 border-white dark:border-slate-900"
+              className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-lg border-2 border-white dark:border-slate-900 z-30"
             >
               <Camera size={14} />
             </button>
@@ -134,10 +143,14 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({ user: initialU
           </div>
         ) : (
           <>
-            <div className="flex items-center justify-center gap-1.5 mb-1">
-              <h2 className="text-2xl font-black text-slate-900 dark:text-white">{formData.name}</h2>
-              {initialUser.isVerified && <CheckCircle2 size={20} className="text-blue-500" />}
-            </div>
+          <div className="flex items-center justify-center gap-1.5 mb-1">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white">{formData.name}</h2>
+            {formData.premiumTier && formData.premiumTier !== 'free' && (
+              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-amber-500 text-white shadow-lg shadow-amber-500/20" title="عضو بريميوم">
+                <Sparkles size={12} fill="currentColor" />
+              </div>
+            )}
+          </div>
             <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mb-4">{formData.title}</p>
           </>
         )}

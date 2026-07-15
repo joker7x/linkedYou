@@ -14,19 +14,24 @@ import {
   ChevronRight,
   Filter
 } from 'lucide-react';
-import { StockItem, Drug } from '../types.ts';
+import { StockItem, Drug, CommunityUser } from '../types.ts';
 import { getStock, getDrugsByIds } from '../services/supabase.ts';
+import { hasAccess } from '../lib/accessControl.ts';
+import { Sparkles, Lock } from 'lucide-react';
 
 interface StockAnalyticsProps {
   onBack: () => void;
   allDrugs: Drug[];
   userId: string;
+  user: CommunityUser | null;
 }
 
-export const StockAnalytics: React.FC<StockAnalyticsProps> = ({ onBack, allDrugs, userId }) => {
+export const StockAnalytics: React.FC<StockAnalyticsProps> = ({ onBack, allDrugs, userId, user }) => {
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [localDrugCache, setLocalDrugCache] = useState<Drug[]>([]);
+
+  const isAccessAllowed = hasAccess(user, 'ANALYTICS');
 
   useEffect(() => {
     const loadData = async () => {
@@ -110,6 +115,39 @@ export const StockAnalytics: React.FC<StockAnalyticsProps> = ({ onBack, allDrugs
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col items-center justify-center p-6" dir="rtl">
         <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin mb-4" />
         <p className="text-sm font-black text-slate-400 animate-pulse">جاري تحليل بيانات المخزون...</p>
+      </div>
+    );
+  }
+
+  if (!isAccessAllowed) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 flex flex-col items-center justify-center text-center" dir="rtl">
+        <div className="w-24 h-24 rounded-[40px] bg-amber-500/10 flex items-center justify-center text-amber-500 mb-8 animate-bounce">
+          <Lock size={40} />
+        </div>
+        <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-4">هذه الميزة متوفرة للنسخة البريميوم فقط</h2>
+        <p className="text-sm font-bold text-slate-500 dark:text-slate-400 max-w-xs leading-relaxed mb-10">
+          استمتع بتحليلات سوق متقدمة، رؤى مالية دقيقة، وتنبيهات فورية لتغير الأسعار في المخزون.
+        </p>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button 
+            onClick={() => onBack()}
+            className="w-full py-5 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-3xl font-black text-sm shadow-xl shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            <Sparkles size={18} fill="currentColor" />
+            تفعيل النسخة البريميوم
+          </button>
+          <button 
+            onClick={onBack}
+            className="w-full py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-3xl font-black text-xs active:scale-95 transition-all"
+          >
+            العودة للخلف
+          </button>
+        </div>
+        <div className="mt-8 flex items-center gap-2 text-amber-500">
+           <Sparkles size={16} />
+           <span className="text-xs font-black uppercase tracking-widest leading-none">Upgrade to Pharma Core Premium</span>
+        </div>
       </div>
     );
   }

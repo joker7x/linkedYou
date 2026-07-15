@@ -1,23 +1,48 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MessageSquare, ShieldCheck, AlertTriangle, Pill, Send, MoreHorizontal, Flag, ThumbsUp, MessageCircle, Search, User, Award, CheckCircle2, Filter, X, Trash2, Clock, Calendar } from 'lucide-react';
+import { MessageSquare, ShieldCheck, AlertTriangle, Pill, Send, MoreHorizontal, Flag, ThumbsUp, MessageCircle, Search, User, Award, CheckCircle2, Filter, X, Trash2, Clock, Calendar, Sparkles } from 'lucide-react';
+import { VerifiedBadge } from './VerifiedBadge.tsx';
 import { CommunityPost, CommunityUser, Drug, CommunityComment } from '../types.ts';
 import { 
   getPosts, addPost, deletePost as deletePostSupabase, 
   deleteComment as deleteCommentSupabase, updateCommentReactions, 
   getLikesCount, getCommentsCount, getIsLiked, addLike, 
   removeLike, searchDrugsSupabase, reportUser, logActivity, 
-  addComment, getComments, getUserProfile, getUserProfiles 
+  addComment, getComments, getUserProfile, getUserProfiles,
+  getBatchPostsMetadata
 } from '../services/supabase.ts';
 import { Avatar } from './Avatar.tsx';
+import { SkeletonLoader } from './SkeletonLoader.tsx';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { hasAccess } from '../lib/accessControl.ts';
+
+const premiumAnimationFrame = `
+@keyframes premium-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes premium-glow {
+  0%, 100% { opacity: 0.5; filter: blur(4px); transform: scale(1); }
+  50% { opacity: 1; filter: blur(8px); transform: scale(1.05); }
+}
+.premium-frame-container {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.premium-spin-element {
+  will-change: transform;
+}
+`;
 
 interface CommunityViewProps {
   onBack: () => void;
   onUserClick: (userId: string) => void;
   userId: string;
+  user: CommunityUser | null;
   config?: any;
+  highlightPostId?: string | null;
+  onClearHighlight?: () => void;
 }
 
 // Mock Data
@@ -84,15 +109,31 @@ const mockPosts: CommunityPost[] = [
   }
 ];
 
-export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClick, userId, config }) => {
+export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClick, userId, user, config, highlightPostId, onClearHighlight }) => {
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [showComments, setShowComments] = useState<string | null>(null);
   const [replyingToCommentId, setReplyingToCommentId] = useState<string | null>(null);
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [postComments, setPostComments] = useState<Record<string, CommunityComment[]>>({});
   const [isCommentingLoading, setIsCommentingLoading] = useState<Record<string, boolean>>({});
+  const [showGeneralReportModal, setShowGeneralReportModal] = useState(false);
+
+  useEffect(() => {
+    if (highlightPostId && !loading) {
+      const element = document.getElementById(`post-${highlightPostId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        element.classList.add('ring-4', 'ring-blue-500/30', 'border-blue-500');
+        setTimeout(() => {
+          element.classList.remove('ring-4', 'ring-blue-500/30', 'border-blue-500');
+          if (onClearHighlight) onClearHighlight();
+        }, 3000);
+      }
+    }
+  }, [highlightPostId, loading]);
 
   const formatTime = (dateString: string) => {
     try {
@@ -194,6 +235,11 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
   const handleSendComment = async (postId: string) => {
     const content = commentInputs[postId];
     if (!content?.trim() || isCommentingLoading[postId]) return;
+
+    if (!hasAccess(user, 'COMMUNITY_COMMENT')) {
+      alert('يجب الترقية للنسخة البريميوم للتمكن من التعليق.');
+      return;
+    }
 
     if (config?.strictMode && userId === 'guest') {
       alert('الوضع الصارم مفعل: يجب تسجيل الدخول للتعليق.');
@@ -315,13 +361,22 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
         )}
         
         <div className="flex gap-2">
-          <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center shrink-0 z-10 overflow-hidden">
-            <Avatar name={comment.author.avatarId || 'avatar_m_01'} size={32} />
+          <div className="relative shrink-0">
+            <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center z-10 overflow-hidden">
+              <Avatar name={comment.author.avatarId || 'avatar_m_01'} size={32} />
+            </div>
+            {comment.author.isVerified && (
+              <div className="absolute -bottom-1 -right-1 z-20">
+                <VerifiedBadge size={10} />
+              </div>
+            )}
           </div>
           <div className="flex-1">
             <div className={`p-3 rounded-2xl ${comment.parentId ? 'bg-slate-50 dark:bg-slate-800/30' : 'bg-slate-50 dark:bg-slate-800/50'} border border-slate-100 dark:border-slate-800`}>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-black text-slate-900 dark:text-white">{comment.author.name}</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-black text-slate-900 dark:text-white">{comment.author.name}</span>
+                </div>
                 <span className="text-[8px] text-slate-400">{typeof formatTime(comment.createdAt) === 'object' ? (formatTime(comment.createdAt) as any).distance : formatTime(comment.createdAt)}</span>
               </div>
               <p className="text-[11px] text-slate-600 dark:text-slate-400 font-medium leading-relaxed">{comment.content}</p>
@@ -407,46 +462,58 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
 
   React.useEffect(() => {
     const loadPosts = async () => {
-      const data = await getPosts(userId);
-      const likedSet = new Set<string>();
-      
-      // Optimization: Get all unique author IDs to fetch profiles in one go
-      const authorIds = data.map(p => p.user_id);
-      const profiles = await getUserProfiles(authorIds);
-      
-      const postsWithCounts = await Promise.all(data.map(async (p) => {
-        const likes = await getLikesCount(p.id);
-        const commentsCount = await getCommentsCount(p.id);
-        const isLiked = await getIsLiked(p.id, userId);
-        const profile = profiles[p.user_id];
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getPosts(userId);
+        const likedSet = new Set<string>();
         
-        if (isLiked) {
-          likedSet.add(p.id);
-        }
+        // Filter out system posts (like promo codes or profile updates)
+        const visibleData = data.filter(p => !p.content.startsWith('__'));
+        
+        // Optimization Phase 1: Get all unique author IDs to fetch profiles in one go
+        const authorIds = visibleData.map(p => p.user_id);
+        const [profiles, metadata] = await Promise.all([
+          getUserProfiles(authorIds),
+          getBatchPostsMetadata(visibleData.map(p => p.id), userId)
+        ]);
+        
+        const postsWithCounts = visibleData.map((p) => {
+          const postMeta = metadata[p.id] || { likes: 0, commentsCount: 0, isLiked: false };
+          const profile = profiles[p.user_id];
+          
+          if (postMeta.isLiked) {
+            likedSet.add(p.id);
+          }
 
-        return {
-          id: p.id,
-          author: { 
-            id: p.user_id, 
-            name: profile?.name || 'مستخدم', 
-            isVerified: profile?.isVerified || false, 
-            level: profile?.level || 'bronze' as const, 
-            points: profile?.points || 0, 
-            role: profile?.role || 'pharmacist' as const,
-            avatarId: profile?.avatarId || 'avatar_m_01'
-          },
-          content: p.content,
-          mentionedDrugs: [],
-          mentionedActiveIngredients: [],
-          likes,
-          commentsCount,
-          createdAt: p.created_at
-        };
-      }));
-      
-      setLikedPosts(likedSet);
-      setPosts(postsWithCounts);
-      setLoading(false);
+          return {
+            id: p.id,
+            author: { 
+              id: p.user_id, 
+              name: profile?.name || 'مستخدم', 
+              isVerified: profile?.isVerified || false, 
+              level: profile?.level || 'bronze' as const, 
+              points: profile?.points || 0, 
+              role: profile?.role || 'pharmacist' as const,
+              avatarId: profile?.avatarId || 'avatar_m_01'
+            },
+            content: p.content,
+            mentionedDrugs: [],
+            mentionedActiveIngredients: [],
+            likes: postMeta.likes,
+            commentsCount: postMeta.commentsCount,
+            createdAt: p.created_at
+          };
+        });
+        
+        setLikedPosts(likedSet);
+        setPosts(postsWithCounts);
+      } catch (e) {
+        console.error("Failed to load community posts:", e);
+        setError('تعذر تحميل المنشورات. يرجى التأكد من اتصالك بالإنترنت.');
+      } finally {
+        setLoading(false);
+      }
     };
     loadPosts();
   }, [userId]);
@@ -617,6 +684,14 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
       console.log("handlePost aborted: content empty or isPosting is true");
       return;
     }
+
+    if (!hasAccess(user, 'COMMUNITY_POST')) {
+      const userPostCount = posts.filter(p => p.author.id === userId).length;
+      if (userPostCount >= 2) {
+        alert('لقد وصلت للحد الأقصى للمنشورات المجانية. يرجى الترقية للبريميوم للنشر غير المحدود.');
+        return;
+      }
+    }
     
     if (config?.strictMode && userId === 'guest') {
       alert('الوضع الصارم مفعل: يجب تسجيل الدخول للمشاركة.');
@@ -751,9 +826,18 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
       </div>
 
       {/* Feed */}
-      <div className="space-y-4">
-        <AnimatePresence>
-          {activeFilter && (
+        {loading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => <SkeletonLoader key={i} />)}
+          </div>
+        ) : error ? (
+          <div className="py-10 text-center text-rose-500 font-bold bg-white dark:bg-slate-900 rounded-2xl p-4 border border-rose-100 dark:border-rose-900/30">
+            {error}
+          </div>
+        ) : (
+          <>
+            <AnimatePresence>
+              {activeFilter && (
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-4">
               <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-3 rounded-2xl border border-blue-100 dark:border-blue-800/50">
                 <div className="flex items-center gap-2">
@@ -770,13 +854,23 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
           )}
         </AnimatePresence>
 
-        {filteredPosts.map(post => {
-          const timeData = formatTime(post.createdAt);
-          const isLiked = likedPosts.has(post.id);
-          const isCommenting = showComments === post.id;
+            {filteredPosts.map(post => {
+              const timeData = formatTime(post.createdAt);
+              const isLiked = likedPosts.has(post.id);
+              const isCommenting = showComments === post.id;
+              const isHighlighted = highlightPostId === post.id;
 
-          return (
-            <div key={post.id} className="bg-white dark:bg-slate-900 rounded-[32px] p-6 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all relative">
+              return (
+            <div 
+              key={post.id} 
+              id={`post-${post.id}`}
+              style={{ contentVisibility: 'auto', containIntrinsicSize: '200px', willChange: 'transform' } as any}
+              className={`bg-white dark:bg-slate-900 rounded-[32px] p-6 border shadow-sm transition-all duration-700 relative ${
+                isHighlighted 
+                  ? 'ring-4 ring-blue-500/30 border-blue-500 z-10 scale-[1.02]' 
+                  : 'border-slate-200 dark:border-slate-800 hover:shadow-md'
+              }`}
+            >
               {/* Time Badge - Top Left Floating */}
               <div className="absolute top-4 left-4 flex flex-col items-end gap-1">
                 <div className="flex items-center gap-1 text-[9px] font-black text-white bg-blue-600 px-2.5 py-1 rounded-full shadow-lg shadow-blue-500/30">
@@ -793,15 +887,44 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
               {/* Post Header */}
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-3 cursor-pointer" onClick={() => onUserClick(post.author.id)}>
-                  <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${getLevelColor(post.author.level)} p-[1.5px] shadow-lg shadow-blue-500/10`}>
-                    <div className="w-full h-full bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center overflow-hidden">
-                      <Avatar name={post.author.avatarId || 'avatar_m_01'} size={44} />
+                  <div className="relative">
+                    <style>{premiumAnimationFrame}</style>
+                    {post.author.premiumTier && post.author.premiumTier !== 'free' && (
+                      <div className="premium-frame-container">
+                        <div 
+                          className="absolute -inset-1 rounded-full bg-gradient-to-r from-amber-400 via-yellow-500 to-amber-600 opacity-75 blur-sm animate-pulse premium-spin-element"
+                          style={{ animation: 'premium-glow 2s ease-in-out infinite' }}
+                        />
+                        <div 
+                          className="absolute -inset-1 rounded-full border-2 border-amber-500/50 border-t-amber-500 border-r-transparent animate-spin premium-spin-element"
+                          style={{ animation: 'premium-spin 3s linear infinite' }}
+                        />
+                      </div>
+                    )}
+                    <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${getLevelColor(post.author.level)} p-[1.5px] shadow-lg shadow-blue-500/10 relative z-10`}>
+                      <div className="w-full h-full bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center overflow-hidden">
+                        <Avatar 
+                          name={post.author.avatarId || 'avatar_m_01'} 
+                          size={44} 
+                          isPremium={post.author.premiumTier && post.author.premiumTier !== 'free'}
+                          premiumType={Number(post.author.id) % 3 === 0 ? 'rainbow' : Number(post.author.id) % 2 === 0 ? 'neon' : 'gold'}
+                        />
+                      </div>
+                      {post.author.isVerified && (
+                        <div className="absolute -bottom-1 -right-1 z-20">
+                          <VerifiedBadge size={14} />
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div>
                     <div className="flex items-center gap-1.5">
                       <span className="font-black text-[15px] text-slate-900 dark:text-white">{post.author.name}</span>
-                      {post.author.isVerified && <CheckCircle2 size={14} className="text-blue-500" />}
+                      {post.author.premiumTier && post.author.premiumTier !== 'free' && (
+                        <div className="flex items-center justify-center w-4 h-4 rounded-full bg-amber-500 text-white shadow-sm shadow-amber-500/20" title="عضو بريميوم">
+                          <Sparkles size={8} fill="currentColor" />
+                        </div>
+                      )}
                     </div>
                     <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
                       {post.author.role === 'pharmacist' ? 'صيدلي متخصص' : 'مستخدم'}
@@ -937,49 +1060,8 @@ export const CommunityView: React.FC<CommunityViewProps> = ({ onBack, onUserClic
             </div>
           );
         })}
-      </div>
-
-      {/* Smart Report Modal */}
-      <AnimatePresence>
-        {showReportModal && (
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[300] bg-slate-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
-            onClick={() => setShowReportModal(null)}
-          >
-            <motion.div 
-              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="bg-white dark:bg-slate-900 w-full max-w-sm rounded-[32px] p-6 shadow-2xl"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-6 text-rose-600 dark:text-rose-500">
-                <div className="w-10 h-10 rounded-full bg-rose-50 dark:bg-rose-900/20 flex items-center justify-center">
-                  <Flag size={20} />
-                </div>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">الإبلاغ عن المحتوى</h3>
-              </div>
-              
-              <div className="space-y-2 mb-6">
-                {[
-                  'معلومات طبية خاطئة',
-                  'تلاعب بأسعار الأدوية',
-                  'محتوى غير لائق أو مسيء',
-                  'إزعاج (Spam)'
-                ].map(reason => (
-                  <button key={reason} onClick={() => handleReport(reason)} className="w-full text-right p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-sm font-bold text-slate-700 dark:text-slate-300 transition-colors">
-                    {reason}
-                  </button>
-                ))}
-              </div>
-              
-              <button onClick={() => setShowReportModal(null)} className="w-full py-4 rounded-2xl font-black text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                إلغاء
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
+      </>
+    )}
+  </div>
   );
 };

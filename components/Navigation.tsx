@@ -14,7 +14,6 @@ interface BottomNavigationProps {
 const tabs: { id: AppView; label: string; icon: React.ElementType }[] = [
   { id: 'home', label: 'الرئيسية', icon: Home },
   { id: 'community', label: 'المجتمع', icon: Users },
-  { id: 'shortages', label: 'المخزون', icon: Package },
   { id: 'settings', label: 'المزيد', icon: MoreHorizontal },
 ];
 
@@ -42,6 +41,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
           return (
             <button 
               key={tab.id}
+              id={`nav-${tab.id}`}
               onClick={() => handleNavClick(tab.id)}
               className={`flex-1 flex flex-col items-center gap-1 py-2 px-1 rounded-2xl transition-all duration-300 relative ${isActive ? 'text-blue-600 dark:text-blue-400' : isRestricted ? 'text-slate-300 dark:text-slate-700' : 'text-slate-400 dark:text-slate-500'}`}
             >

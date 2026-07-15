@@ -3,13 +3,18 @@
 @tailwind utilities;
 
 @layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+    @apply antialiased;
+  }
   body {
-    @apply m-0 p-0 font-sans bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 antialiased overflow-hidden transition-colors duration-300;
+    @apply m-0 p-0 font-sans bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 antialiased overflow-x-hidden transition-colors duration-300;
     direction: rtl;
     font-family: 'IBM Plex Sans Arabic', sans-serif;
+    text-rendering: optimizeLegibility;
   }
   #root {
-    @apply h-screen w-screen overflow-y-auto overflow-x-hidden;
+    @apply h-full w-full;
   }
 }
 
@@ -39,5 +44,12 @@
   .custom-scrollbar::-webkit-scrollbar-thumb {
     background-color: rgba(156, 163, 175, 0.5);
     border-radius: 20px;
+  }
+
+  .optimize-gpu {
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    will-change: transform;
+    perspective: 1000px;
   }
 }

@@ -8,7 +8,7 @@ async function test() {
     const fontBuffer = await fontRes.arrayBuffer();
     
     const svg = await satori(
-      { type: 'div', props: { style: { display: 'flex' }, children: 'Test' } },
+      { type: 'div', props: { style: { display: 'flex' }, children: 'Test' } } as any,
       { width: 1200, height: 630, fonts: [{ name: 'Cairo', data: fontBuffer, weight: 700, style: 'normal' }] }
     );
     console.log('SVG generated');

@@ -1,8 +1,10 @@
 
 import React, { useState } from 'react';
-import { Moon, Info, Settings, ShieldCheck, Smartphone, ChevronLeft, User, ExternalLink, Shield, MessageSquare, Headphones, FileText, ScrollText, X, Lock, ShieldAlert, Award, BarChart3, ChevronRight } from 'lucide-react';
+import { Moon, Info, Settings, ShieldCheck, Smartphone, ChevronLeft, User, ExternalLink, Shield, MessageSquare, Headphones, FileText, ScrollText, X, Lock, ShieldAlert, Award, BarChart3, ChevronRight, Sparkles, RefreshCw, CheckCircle2, AlertTriangle, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Avatar } from './Avatar.tsx';
+import { redeemPromoCode } from '../services/supabase.ts';
+import { getTierLabel } from '../lib/accessControl.ts';
 
 interface SettingsViewProps {
   user: any;
@@ -15,6 +17,7 @@ interface SettingsViewProps {
   onOpenInvoice: () => void;
   onOpenAnalytics: () => void;
   onOpenShortages: () => void;
+  onOpenInventory: () => void;
   onOpenProfile: () => void;
   onUpdateUser?: (updates: any) => void;
 }
@@ -81,11 +84,44 @@ const PolicyModal = ({ title, content, onClose }: { title: string, content: stri
   );
 };
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ user, darkMode, toggleDarkMode, onBack, isAdmin, onOpenAdmin, onOpenInvoice, onOpenAnalytics, onOpenShortages, onOpenProfile }) => {
+export const SettingsView: React.FC<SettingsViewProps> = (props) => {
+  const { 
+    user, darkMode, toggleDarkMode, onBack, isAdmin, 
+    onOpenAdmin, onOpenInvoice, onOpenAnalytics, 
+    onOpenShortages, onOpenInventory, onOpenProfile, onUpdateUser 
+  } = props;
+  
   // Use any to bypass TypeScript errors for motion props
   const MDiv = motion.div as any;
   const MButton = motion.button as any;
   const [modal, setModal] = useState<{ title: string, content: string } | null>(null);
+  
+  const [promoCode, setPromoCode] = useState('');
+  const [isRedeeming, setIsRedeeming] = useState(false);
+  const [redeemMessage, setRedeemMessage] = useState<{ text: string, success: boolean } | null>(null);
+
+  const safeAction = (fn?: () => void) => () => {
+    if (typeof fn === 'function') fn();
+    else console.warn('Action not provided');
+  };
+
+  const handleRedeem = async () => {
+    if (!promoCode || !user) return;
+    setIsRedeeming(true);
+    setRedeemMessage(null);
+    try {
+      const result = await redeemPromoCode(String(user.id), promoCode);
+      setRedeemMessage({ text: result.message, success: result.success });
+      if (result.success && onUpdateUser) {
+        // We need to refresh user data from server to get full profile
+        onUpdateUser({ premiumTier: 'premium' }); // Optimistic update
+      }
+    } catch (e) {
+      setRedeemMessage({ text: 'حدث خطأ غير متوقع', success: false });
+    } finally {
+      setIsRedeeming(false);
+    }
+  };
 
   const openSupport = () => {
     window.open("https://t.me/your_support_username", "_blank");
@@ -108,7 +144,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user, darkMode, togg
   };
 
   return (
-    <div className="pt-14 px-4 pb-32 min-h-screen">
+    <div className="pt-14 px-4 pb-32 min-h-screen" dir="rtl">
         <header className="flex items-center justify-between mb-8 pt-4 px-2">
           <div className="flex items-center gap-4">
               <div className="w-12 h-12 rounded-[20px] bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
@@ -138,12 +174,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user, darkMode, togg
         {user && (
           <MButton 
             whileTap={{ scale: 0.98 }}
-            onClick={onOpenProfile}
+            onClick={safeAction(onOpenProfile)}
             className="w-full mb-8 p-6 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[40px] text-white shadow-2xl shadow-blue-500/30 relative overflow-hidden text-right flex items-center gap-4"
           >
              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 blur-3xl -mr-16 -mt-16" />
              <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center border border-white/30 overflow-hidden relative z-10">
-                <Avatar name={user.avatarId || 'avatar_m_01'} size={64} />
+                <Avatar name={user.avatarId || 'avatar_m_01'} size={64} isPremium={user.premiumTier && user.premiumTier !== 'free'} />
              </div>
              <div className="flex-1 relative z-10">
                 <div className="flex items-center gap-2">
@@ -160,14 +196,86 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user, darkMode, togg
 
         {isAdmin && (
           <SettingSection title="الإدارة الفنية">
-             <SettingItem icon={ShieldAlert} label="لوحة تحكم النظام" color="blue" action={onOpenAdmin} isLast />
+             <SettingItem icon={ShieldAlert} label="لوحة تحكم النظام" color="blue" action={safeAction(onOpenAdmin)} isLast />
           </SettingSection>
         )}
 
+        <SettingSection title="الاشتراك المميز">
+            {user?.premiumTier && user.premiumTier !== 'free' ? (
+              <div className="p-6 bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/10 dark:to-slate-900">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-white shadow-lg shadow-amber-500/20">
+                      <Sparkles size={20} fill="currentColor" />
+                    </div>
+                    <div>
+                      <span className="font-black text-base text-slate-800 dark:text-white block">{getTierLabel(user)}</span>
+                      {user.premiumUntil && (
+                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">ينتهي في: {new Date(user.premiumUntil).toLocaleDateString('ar-EG')}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {user.unlockedFeatures?.map((f: string) => (
+                    <span key={f} className="text-[9px] font-black px-2.5 py-1 bg-white dark:bg-slate-800 text-amber-600 dark:text-amber-400 rounded-lg border border-amber-100 dark:border-amber-900/30">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 border-2 border-amber-500/20 rounded-[28px] m-1 overflow-hidden relative">
+                 <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 blur-3xl -mr-16 -mt-16 pointer-events-none" />
+                 
+                 <div className="flex items-start gap-4 mb-6">
+                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white shadow-lg shadow-amber-500/20 shrink-0">
+                     <Sparkles size={24} strokeWidth={2.5} />
+                   </div>
+                   <div>
+                     <span className="font-black text-lg text-slate-800 dark:text-white block">هل لديك كود تفعيل؟</span>
+                     <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mt-1">ادخل الكود الخاص بك لفتح كامل المزايا الحصرية والنسخة الاحترافية.</p>
+                   </div>
+                 </div>
+                 
+                 <div className="relative group">
+                   <input 
+                     type="text" 
+                     placeholder="ادخل الكود هنا (PHARMA2024)" 
+                     value={promoCode}
+                     onChange={(e) => setPromoCode(e.target.value)}
+                     className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-800 rounded-3xl pr-6 pl-32 py-4 text-sm font-black outline-none focus:border-amber-500 dark:focus:border-amber-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                   />
+                   <button 
+                     onClick={handleRedeem}
+                     disabled={isRedeeming || !promoCode}
+                     className="absolute left-2 top-2 bottom-2 px-6 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-[20px] font-black text-xs shadow-md shadow-amber-500/30 hover:shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+                   >
+                     {isRedeeming ? <RefreshCw size={16} className="animate-spin" /> : 'تفعيل الآن'}
+                   </button>
+                 </div>
+                 
+                 {redeemMessage && (
+                   <motion.div 
+                    initial={{ opacity: 0, scale: 0.98 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={`flex items-center gap-3 mt-4 p-4 rounded-2xl ${redeemMessage.success ? 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-800/30' : 'bg-rose-50 dark:bg-rose-900/10 text-rose-500 dark:text-rose-400 border border-rose-100 dark:border-rose-800/30'}`}
+                   >
+                     <div className="w-6 h-6 rounded-full bg-white dark:bg-slate-900 flex items-center justify-center shrink-0 shadow-sm">
+                        {redeemMessage.success ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                     </div>
+                     <span className="text-xs font-black leading-tight">{redeemMessage.text}</span>
+                   </motion.div>
+                 )}
+              </div>
+            )}
+        </SettingSection>
+
         <SettingSection title="أدوات الصيدلية">
-            <SettingItem icon={BarChart3} label="تحليلات المخزون" color="blue" action={onOpenAnalytics} />
-            <SettingItem icon={ShieldAlert} label="نواقص السوق" color="rose" action={onOpenShortages} />
-            <SettingItem icon={FileText} label="منشئ الفواتير" color="emerald" action={onOpenInvoice} isLast />
+            <SettingItem icon={Package} label="مخزون الصيدلية (Stock)" color="indigo" action={safeAction(onOpenInventory)} />
+            <SettingItem icon={BarChart3} label="تحليلات المخزون" color="blue" action={safeAction(onOpenAnalytics)} />
+            <SettingItem icon={ShieldAlert} label="نواقص السوق" color="rose" action={safeAction(onOpenShortages)} />
+            <SettingItem icon={FileText} label="منشئ الفواتير" color="emerald" action={safeAction(onOpenInvoice)} isLast />
         </SettingSection>
 
         <SettingSection title="المظهر">

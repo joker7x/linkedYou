@@ -36,6 +36,7 @@ async function startServer() {
         fontBuffer = await fontRes.arrayBuffer();
       }
 
+      // @ts-ignore
       const svg = await satori(
         {
           type: 'div',
@@ -154,7 +155,7 @@ async function startServer() {
               }
             ]
           }
-        },
+        } as any,
         {
           width: 1200,
           height: 630,

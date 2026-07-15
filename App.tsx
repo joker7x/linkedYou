@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Package2, ShieldCheck, Zap, LayoutGrid, Info, Award, Lock, ExternalLink } from 'lucide-react';
+import { Search, Package2, ShieldCheck, Zap, LayoutGrid, Info, Award, Lock, ExternalLink, Bell, X, CheckCircle2, Clock, Sparkles, TrendingUp, ChevronLeft } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { fetchDrugBatchFromAPI } from './services/api.ts';
 import { Drug, TabMode, AppView, AdminConfig } from './types.ts';
@@ -16,12 +16,54 @@ import { UserProfileView } from './components/UserProfileView.tsx';
 import { StockAnalytics } from './components/StockAnalytics.tsx';
 import { ShortagesView } from './components/ShortagesView.tsx';
 import { PromoView } from './components/PromoView.tsx';
-import { getGlobalConfig, syncTelegramUser, logSession, getUserProfile, checkUserBan, supabase } from './services/supabase.ts';
+import { CoachMark } from './components/CoachMark.tsx';
+import { PopUpPreview } from './components/PopUpPreview.tsx';
+import { formatDistanceToNow, format } from 'date-fns';
+import { ar } from 'date-fns/locale';
+import { getGlobalConfig, syncTelegramUser, logSession, getUserProfile, checkUserBan, supabase, getRecentlyChangedDrugs, getBroadcasts } from './services/supabase.ts';
 import { ADMIN_ID } from './constants.ts';
+import { hasAccess } from './lib/accessControl.ts';
 
 const App: React.FC = () => {
   const MDiv = motion.div as any;
+  const [config, setConfig] = useState<AdminConfig>({
+    marketCheck: true, 
+    maintenanceMode: false,
+    maintenanceMessage: "", 
+    maintenanceTime: "", 
+    liveSync: true,
+    strictMode: true
+  });
   const [allDrugs, setAllDrugs] = useState<Drug[]>([]);
+  const [changedDrugs, setChangedDrugs] = useState<Drug[]>([]);
+  const [showCoachMark, setShowCoachMark] = useState(false);
+  const [showAnnouncement, setShowAnnouncement] = useState(false);
+
+  useEffect(() => {
+    // Check if user is first time
+    const isFirstTime = !localStorage.getItem('coachMarkShown');
+    if (isFirstTime) {
+      setTimeout(() => setShowCoachMark(true), 1500); 
+    }
+  }, []);
+
+  useEffect(() => {
+    if (config.announcement?.isVisible && !localStorage.getItem(`announcementShown-${config.announcement.title}`)) {
+      setTimeout(() => setShowAnnouncement(true), 2500);
+    }
+  }, [config.announcement]);
+
+  const handleCloseCoachMark = () => {
+    setShowCoachMark(false);
+    localStorage.setItem('coachMarkShown', 'true');
+  };
+
+  const handleCloseAnnouncement = () => {
+    setShowAnnouncement(false);
+    if (config.announcement?.title) {
+        localStorage.setItem(`announcementShown-${config.announcement.title}`, 'true');
+    }
+  };
   const [loading, setLoading] = useState<boolean>(true);
   const [initialLoading, setInitialLoading] = useState<boolean>(true);
   const [isAccessDenied, setIsAccessDenied] = useState<boolean>(false);
@@ -44,9 +86,31 @@ const App: React.FC = () => {
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
   const [promoId, setPromoId] = useState<string | null>(null);
+  const [highlightPostId, setHighlightPostId] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const [isTelegram, setIsTelegram] = useState(false);
+  
+  useEffect(() => {
+    // Load notifications
+    getBroadcasts(currentUser?.id ? String(currentUser.id) : undefined).then(notifs => {
+      setNotifications(notifs);
+      const lastRead = localStorage.getItem('lastReadNotification');
+      const unread = notifs.filter(n => !lastRead || new Date(n.timestamp) > new Date(lastRead)).length;
+      setUnreadCount(unread);
+    });
+  }, [currentUser?.id]);
 
+  const handleOpenNotifications = () => {
+    setShowNotifications(true);
+    setUnreadCount(0);
+    if (notifications.length > 0) {
+      localStorage.setItem('lastReadNotification', notifications[0].timestamp);
+    }
+  };
+  
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const promo = params.get('promo');
@@ -93,15 +157,6 @@ const App: React.FC = () => {
     window.scrollTo(0, 0);
   };
   
-  const [config, setConfig] = useState<AdminConfig>({
-    aiAnalysis: true, 
-    marketCheck: true, 
-    maintenanceMode: false,
-    maintenanceMessage: "", 
-    maintenanceTime: "", 
-    liveSync: true,
-    strictMode: true
-  });
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -155,14 +210,18 @@ const App: React.FC = () => {
           }
         }
 
-        const [configRes, drugsRes] = await Promise.allSettled([
+        const [configRes, drugsRes, changedRes] = await Promise.allSettled([
           getGlobalConfig(),
-          fetchDrugBatchFromAPI(0)
+          fetchDrugBatchFromAPI(0),
+          getRecentlyChangedDrugs(20)
         ]);
 
         if (configRes.status === 'fulfilled' && configRes.value) setConfig({...config, ...configRes.value});
         if (drugsRes.status === 'fulfilled' && drugsRes.value) {
           setAllDrugs(drugsRes.value);
+        }
+        if (changedRes.status === 'fulfilled' && changedRes.value) {
+          setChangedDrugs(changedRes.value);
         }
       } catch (e) {
         console.warn("Bootstrap process finished with warnings.");
@@ -186,7 +245,15 @@ const App: React.FC = () => {
 
   const filteredDrugs = React.useMemo(() => {
     let filtered = allDrugs;
-    if (mode === 'changed') filtered = filtered.filter(d => d.price_new !== d.price_old);
+    if (mode === 'changed') {
+       filtered = filtered.filter(d => d.price_new !== d.price_old);
+    } else if (mode === 'all' && !search && changedDrugs.length > 0) {
+       // Merge changed drugs at the top if no search query
+       const changedNos = new Set(changedDrugs.map(d => d.drug_no));
+       const rest = allDrugs.filter(d => !changedNos.has(d.drug_no));
+       filtered = [...changedDrugs, ...rest];
+    }
+    
     if (search) {
       const s = search.toLowerCase();
       filtered = filtered.filter(d => 
@@ -207,9 +274,13 @@ const App: React.FC = () => {
     const isSuperAdmin = Number(currentUser?.id) === ADMIN_ID;
     if (isAdmin || isSuperAdmin) return result;
 
-    const explicitLimit = currentUser?.device_info?.items_limit;
-    if (explicitLimit && !isNaN(Number(explicitLimit))) {
-      return result.slice(0, Number(explicitLimit));
+    const hasUnlimited = hasAccess(currentUser, 'UNLIMITED_DRUGS');
+    const dbLimit = currentUser?.device_info?.items_limit;
+    
+    if (!hasUnlimited) {
+      // Free users get a default limit of 50, unless explicitly set higher in DB
+      const limit = (dbLimit && !isNaN(Number(dbLimit))) ? Number(dbLimit) : 50;
+      return result.slice(0, limit);
     }
     
     return result;
@@ -394,13 +465,31 @@ const App: React.FC = () => {
     }
 
     switch (currentView) {
-      case 'admin': return <AdminView onBack={() => setCurrentView('home')} drugsCount={allDrugs.length} config={config} onUpdateConfig={c => setConfig({...config, ...c})} currentUser={currentUser} />;
-      case 'settings': return <SettingsView user={currentUser} darkMode={isDarkMode} toggleDarkMode={() => setIsDarkMode(!isDarkMode)} onClearFavorites={() => {}} onBack={() => setCurrentView('home')} isAdmin={isAdmin} onOpenAdmin={() => setCurrentView('admin')} onOpenInvoice={() => setCurrentView('invoice')} onOpenAnalytics={() => setCurrentView('analytics')} onOpenShortages={() => setCurrentView('market_shortages')} onOpenProfile={() => setCurrentView('profile')} onUpdateUser={(updates: any) => setCurrentUser((prev: any) => ({...prev, ...updates}))} />;
+      case 'admin': return <AdminView 
+        onBack={() => setCurrentView('home')} 
+        drugsCount={allDrugs.length} 
+        config={config} 
+        onUpdateConfig={c => setConfig({...config, ...c})} 
+        currentUser={currentUser} 
+        onViewPost={(postId) => {
+          setHighlightPostId(postId);
+          setCurrentView('community');
+        }}
+      />;
+      case 'settings': return <SettingsView user={currentUser} darkMode={isDarkMode} toggleDarkMode={() => setIsDarkMode(!isDarkMode)} onClearFavorites={() => {}} onBack={() => setCurrentView('home')} isAdmin={isAdmin} onOpenAdmin={() => setCurrentView('admin')} onOpenInvoice={() => setCurrentView('invoice')} onOpenAnalytics={() => setCurrentView('analytics')} onOpenShortages={() => setCurrentView('market_shortages')} onOpenInventory={() => setCurrentView('shortages')} onOpenProfile={() => setCurrentView('profile')} onUpdateUser={(updates: any) => setCurrentUser((prev: any) => ({...prev, ...updates}))} />;
       case 'invoice': return <InvoiceBuilder onBack={() => setCurrentView('home')} />;
-      case 'shortages': return <InventoryView onBack={() => setCurrentView('home')} allDrugs={allDrugs} shortageDrugIds={['1', '5']} userId={currentUser?.id ? String(currentUser.id) : 'guest'} />;
-      case 'market_shortages': return <ShortagesView onBack={() => setCurrentView('settings')} />;
-      case 'analytics': return <StockAnalytics onBack={() => setCurrentView('settings')} allDrugs={allDrugs} userId={currentUser?.id ? String(currentUser.id) : 'guest'} />;
-      case 'community': return <CommunityView onBack={() => setCurrentView('home')} onUserClick={navigateToProfile} userId={currentUser?.id ? String(currentUser.id) : 'guest'} config={config} />;
+      case 'shortages': return <InventoryView onBack={() => setCurrentView('settings')} allDrugs={allDrugs} shortageDrugIds={['1', '5']} userId={currentUser?.id ? String(currentUser.id) : 'guest'} />;
+      case 'market_shortages': return <ShortagesView onBack={() => setCurrentView('settings')} user={currentUser} />;
+      case 'analytics': return <StockAnalytics onBack={() => setCurrentView('settings')} allDrugs={allDrugs} userId={currentUser?.id ? String(currentUser.id) : 'guest'} user={currentUser} />;
+      case 'community': return <CommunityView 
+        onBack={() => setCurrentView('home')} 
+        onUserClick={navigateToProfile} 
+        userId={currentUser?.id ? String(currentUser.id) : 'guest'} 
+        user={currentUser}
+        config={config} 
+        highlightPostId={highlightPostId}
+        onClearHighlight={() => setHighlightPostId(null)}
+      />;
       case 'profile': 
         const profileUser = selectedUserId 
           ? { id: selectedUserId } 
@@ -434,29 +523,63 @@ const App: React.FC = () => {
         };
 
         return (
-        <div className="pt-14 px-4 max-w-lg mx-auto w-full pb-32">
-          <header className="flex items-center justify-between mb-8 pt-4 px-2">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-[20px] bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
-                <ShieldCheck size={24} strokeWidth={2.5} />
+        <div className="pt-2 px-4 max-w-lg mx-auto w-full pb-32">
+          <header className="sticky top-0 z-50 -mx-4 px-6 py-4 mb-8 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 flex items-center justify-between transition-all duration-300">
+            <div className="flex items-center gap-3.5">
+              <div className="relative group">
+                <div className="absolute -inset-1.5 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
+                <div className="relative w-11 h-11 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/20 active:scale-95 transition-transform">
+                  <ShieldCheck size={22} strokeWidth={2.5} />
+                </div>
               </div>
               <div>
-                <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">PHARMA <span className="text-blue-600">CORE</span></h1>
-                <p className="text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">Premium v4.0</p>
+                <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-1.5">
+                  PHARMA <span className="bg-gradient-to-br from-blue-600 to-indigo-600 bg-clip-text text-transparent">CORE</span>
+                </h1>
+                <div className="flex items-center gap-2">
+                  {currentUser?.premiumTier && currentUser.premiumTier !== 'free' && (
+                    <div className="px-1.5 py-0.5 rounded-md bg-amber-500 text-white text-[8px] font-black uppercase tracking-wider flex items-center gap-1">
+                      <Sparkles size={8} fill="currentColor" />
+                      Premium
+                    </div>
+                  )}
+                  <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest leading-none">v4.0.2</p>
+                </div>
               </div>
             </div>
             
-            {/* User Gamification Badge */}
-            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm">
-              <div className="text-right">
-                <div className="text-[10px] font-black text-slate-400 dark:text-slate-500">نقاطك</div>
-                <div className="text-sm font-black text-blue-600 dark:text-blue-400 leading-none">{gamification.points}</div>
-              </div>
-              <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getLevelColor(gamification.level)} p-[2px]`}>
-                <div className="w-full h-full bg-white dark:bg-slate-900 rounded-full flex items-center justify-center">
-                  <Award size={14} className="text-slate-800 dark:text-slate-200" />
+            <div className="flex items-center gap-2.5">
+              {/* Notifications Bell */}
+              <button 
+                onClick={handleOpenNotifications}
+                className="group relative w-10 h-10 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-900/50 transition-all shadow-sm active:scale-90"
+              >
+                <Bell size={18} className="group-hover:rotate-12 transition-transform" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 border-2 border-white dark:border-slate-950 flex items-center justify-center text-[7px] font-black text-white">
+                      {unreadCount}
+                    </span>
+                  </span>
+                )}
+              </button>
+
+              {/* User Gamification Badge */}
+              <button 
+                onClick={() => setCurrentView('profile')}
+                className="flex items-center gap-3 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm active:scale-95 transition-all hover:border-blue-200 dark:hover:border-blue-900/50"
+              >
+                <div className="text-right hidden sm:block">
+                  <div className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-tighter">النقاط</div>
+                  <div className="text-sm font-black text-slate-900 dark:text-white leading-none">{gamification.points}</div>
                 </div>
-              </div>
+                <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${getLevelColor(gamification.level)} p-[1.5px] shadow-sm`}>
+                  <div className="w-full h-full bg-white dark:bg-slate-900 rounded-[10px] flex items-center justify-center">
+                    <Award size={14} className="text-slate-800 dark:text-slate-200" />
+                  </div>
+                </div>
+              </button>
             </div>
           </header>
 
@@ -469,23 +592,48 @@ const App: React.FC = () => {
               onChange={(e) => setSearchInput(e.target.value)} 
               className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[28px] px-8 py-6 pr-16 text-slate-800 dark:text-slate-100 text-lg font-bold outline-none focus:ring-4 ring-blue-500/10 dark:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-500 transition-all text-right shadow-sm" 
             />
-            {config.aiAnalysis && (
-              <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-3 py-1.5 rounded-full border border-indigo-100 dark:border-indigo-800/50">
-                <Zap size={14} className="fill-indigo-600 dark:fill-indigo-400" />
-                <span className="text-[10px] font-black tracking-wider uppercase">AI Search</span>
-              </div>
-            )}
           </div>
 
           <div className="mb-10">
             <TabFilter current={mode} onChange={setMode} />
           </div>
 
+          {/* Recently Changed Horizontal Scroll Section */}
+          {!search && mode === 'all' && changedDrugs.length > 0 && (
+            <div className="mb-10 overflow-hidden">
+              <div className="flex items-center justify-between px-2 mb-4">
+                <div className="flex items-center gap-2 text-amber-500">
+                  <Zap size={16} fill="currentColor" />
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">آخر التحديثات</span>
+                </div>
+                <button 
+                  onClick={() => setMode('changed')}
+                  className="text-[10px] font-black text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  عرض الكل
+                </button>
+              </div>
+              <div className="flex overflow-x-auto no-scrollbar gap-4 pb-4 px-2 -mx-2 snap-x">
+                {changedDrugs.map((drug, idx) => (
+                  <div key={`h-scroll-${drug.drug_no}`} className="snap-start min-w-[280px]">
+                    <DrugCard 
+                      drug={drug} 
+                      index={idx} 
+                      isFavorite={favorites.has(drug.drug_no)} 
+                      onToggleFavorite={handleToggleFavorite} 
+                      onOpenInfo={setSelectedDrug} 
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="space-y-6">
             <div className="flex items-center justify-between px-2 mb-2">
                <div className="flex items-center gap-2 text-slate-400 dark:text-slate-500">
                   <LayoutGrid size={14} />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">قائمة الأدوية</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">{mode === 'all' && !search ? 'بقية الأصناف' : 'قائمة الأدوية'}</span>
                </div>
                <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-900/30">
                   {filteredDrugs.length} صنف متاح
@@ -516,16 +664,23 @@ const App: React.FC = () => {
                 </MDiv>
               ) : (
                 <>
-                  {filteredDrugs.map((drug, idx) => (
-                    <DrugCard 
-                      key={`${drug.drug_no}-${idx}`} 
-                      drug={drug} 
-                      index={idx} 
-                      isFavorite={favorites.has(drug.drug_no)} 
-                      onToggleFavorite={handleToggleFavorite} 
-                      onOpenInfo={setSelectedDrug} 
-                    />
-                  ))}
+                  {filteredDrugs.map((drug, idx) => {
+                    const isRecentlyChanged = mode === 'all' && !search && changedDrugs.some(cd => cd.drug_no === drug.drug_no);
+                    
+                    // Skip if already shown in the horizontal scroll above
+                    if (isRecentlyChanged) return null;
+
+                    return (
+                      <DrugCard 
+                        key={`${drug.drug_no}-${idx}`}
+                        drug={drug} 
+                        index={idx} 
+                        isFavorite={favorites.has(drug.drug_no)} 
+                        onToggleFavorite={handleToggleFavorite} 
+                        onOpenInfo={setSelectedDrug} 
+                      />
+                    );
+                  })}
                   {isFetching ? (
                     <div className="py-6 flex justify-center">
                       <div className="w-8 h-8 border-4 border-slate-100 dark:border-slate-800 border-t-blue-600 dark:border-t-blue-500 rounded-full animate-spin"></div>
@@ -604,7 +759,16 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 selection:bg-blue-500/20 dark:selection:bg-blue-500/30 overflow-x-hidden transition-colors duration-300">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 selection:bg-blue-500/20 dark:selection:bg-blue-500/30 transition-colors duration-300">
+      <CoachMark isVisible={showCoachMark} onClose={handleCloseCoachMark} targetId="nav-community" />
+      {showAnnouncement && config.announcement && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm"
+             onClick={handleCloseAnnouncement}>
+           <div className="w-full max-w-sm rounded-[32px] overflow-hidden" onClick={e => e.stopPropagation()}>
+               <PopUpPreview theme={config.announcement.theme} title={config.announcement.title} message={config.announcement.message} onClose={handleCloseAnnouncement} />
+           </div>
+        </div>
+      )}
       <AnimatePresence>
         {promoId && (
           <PromoView promoId={promoId} onClose={() => setPromoId(null)} isTelegram={isTelegram} />
@@ -623,6 +787,99 @@ const App: React.FC = () => {
           isAdmin={isAdmin}
         />
       )}
+
+      {/* Notifications Modal */}
+      <AnimatePresence>
+        {showNotifications && (
+          <div className="fixed inset-0 z-[600] flex items-center justify-center p-4" dir="rtl">
+            <MDiv 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowNotifications(false)}
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            />
+            <MDiv 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-[40px] shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden"
+            >
+              <div className="p-8 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">الإشعارات</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">آخر التنبيهات من النظام</p>
+                </div>
+                <button onClick={() => setShowNotifications(false)} className="w-10 h-10 rounded-full bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="max-h-[60vh] overflow-y-auto p-4 no-scrollbar">
+                {notifications.length === 0 ? (
+                  <div className="py-20 text-center flex flex-col items-center gap-4">
+                    <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-slate-200">
+                      <Bell size={32} />
+                    </div>
+                    <p className="text-sm font-bold text-slate-400">لا توجد إشعارات جديدة حالياً</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {notifications.map(notif => {
+                      const isPriceAlert = notif.type === 'price_alert';
+                      return (
+                        <div key={notif.id} className={`p-6 rounded-[28px] border transition-all group ${isPriceAlert ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-900/40 ring-4 ring-amber-500/5' : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-900'}`}>
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform ${isPriceAlert ? 'bg-amber-500 shadow-amber-500/20' : 'bg-blue-600 shadow-blue-500/20'}`}>
+                              {isPriceAlert ? <TrendingUp size={18} /> : <Bell size={18} />}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className={`text-sm font-black leading-none ${isPriceAlert ? 'text-amber-900 dark:text-amber-200' : 'text-slate-800 dark:text-slate-200'}`}>
+                                {isPriceAlert ? 'تنبيه تغيير سعر' : notif.title}
+                              </h4>
+                              <div className="flex items-center gap-2 mt-1.5">
+                                <Clock size={10} className="text-slate-400" />
+                                <span className="text-[9px] font-bold text-slate-400">{formatDistanceToNow(new Date(notif.timestamp), { addSuffix: true, locale: ar })}</span>
+                              </div>
+                            </div>
+                            {isPriceAlert && (
+                              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                            )}
+                          </div>
+                          
+                          {isPriceAlert ? (
+                            <div className="pr-13">
+                              <p className="text-[13px] font-bold text-amber-800 dark:text-amber-300 leading-relaxed mb-2">
+                                تغير سعر <span className="underline decoration-amber-500/30 underline-offset-4">{notif.name_ar || notif.name_en}</span> في مخزونك.
+                              </p>
+                              <div className="flex items-center gap-2 bg-white/50 dark:bg-slate-900/50 p-2 rounded-xl border border-amber-200/50 dark:border-amber-900/30 w-fit">
+                                <span className="text-[10px] font-black text-slate-400 line-through">{notif.oldPrice} ج</span>
+                                <ChevronLeft size={12} className="text-amber-500" />
+                                <span className="text-sm font-black text-amber-600 dark:text-amber-400">{notif.newPrice} ج</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 leading-relaxed pr-13">{notif.message}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-6 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-50 dark:border-slate-800">
+                 <button 
+                  onClick={() => setShowNotifications(false)}
+                  className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-sm active:scale-95 transition-all shadow-lg"
+                 >
+                   تم العرض
+                 </button>
+              </div>
+            </MDiv>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

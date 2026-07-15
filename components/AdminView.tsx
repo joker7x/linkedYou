@@ -2,14 +2,22 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MarketingView } from './MarketingView.tsx';
+import { PopUpPreview, PopUpTheme } from './PopUpPreview.tsx';
 import { 
   ShieldCheck, ArrowRight, Activity, Database, Users, Sparkles, Globe, Construction, Bell, Send, 
   Bot, RefreshCw, Terminal, Settings as SettingsIcon, ShieldAlert, Coins, History, Ban, Lock, Unlock, 
   Save, AlertTriangle, Fingerprint, Eye, Zap, HeartPulse, CheckCircle2, ChevronLeft, Trash2, MessageSquare,
-  Search, Filter, ExternalLink, User, Package, TrendingUp
+  Search, Filter, ExternalLink, User, Package, TrendingUp, Clock
 } from 'lucide-react';
+import { VerifiedBadge } from './VerifiedBadge.tsx';
 import { AdminConfig } from '../types.ts';
-import { getAllUsers, updateGlobalConfig, getAllPostsAdmin, adminDeletePost, updateUserPermissions } from '../services/supabase.ts';
+import { 
+  getAllUsers, updateGlobalConfig, getAllPostsAdmin, adminDeletePost, updateUserPermissions,
+  sendBroadcast as sendBroadcastSupabase, getUserProfile, updateUserProfile,
+  getBroadcasts, deleteBroadcast, getPremiumStats, getPromoCodes, createPromoCode, deletePromoCode,
+  getActivityLogs, getReports
+} from '../services/supabase.ts';
+import { PREMIUM_FEATURES } from '../lib/accessControl.ts';
 import { ADMIN_ID } from '../constants.ts';
 import { formatDistanceToNow } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -20,6 +28,7 @@ interface AdminViewProps {
   config: AdminConfig;
   onUpdateConfig: (config: Partial<AdminConfig>) => void;
   currentUser: any;
+  onViewPost?: (postId: string) => void;
 }
 
 const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab }: any) => {
@@ -42,16 +51,46 @@ const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab }: any) => {
   );
 };
 
-export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config, onUpdateConfig, currentUser }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'moderation' | 'system' | 'marketing'>('dashboard');
+export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config, onUpdateConfig, currentUser, onViewPost }) => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'moderation' | 'system' | 'marketing' | 'premium' | 'reports'>('dashboard');
+  const [reports, setReports] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [auditLogs, setAuditLogs] = useState<{msg: string, time: string}[]>([]);
+  
+  // Premium System State
+  const [premiumStats, setPremiumStats] = useState<any>(null);
+  const [promoCodes, setPromoCodes] = useState<any[]>([]);
+  const [newPromoCode, setNewPromoCode] = useState({ code: '', limit: 10, duration: 30 });
+  const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
+  const [isCreatingPromo, setIsCreatingPromo] = useState(false);
   const [broadcastTitle, setBroadcastTitle] = useState('');
   const [broadcastMessage, setBroadcastMessage] = useState('');
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [broadcastSuccess, setBroadcastSuccess] = useState(false);
+  const [recentBroadcasts, setRecentBroadcasts] = useState<any[]>([]);
+  const [isDeletingBroadcast, setIsDeletingBroadcast] = useState<string | null>(null);
+  const [broadcastConfirmDelete, setBroadcastConfirmDelete] = useState<string | null>(null);
+  
+  // Announcement Config State
+  const [announcementTitle, setAnnouncementTitle] = useState(config.announcement?.title || '');
+  const [announcementMessage, setAnnouncementMessage] = useState(config.announcement?.message || '');
+  const [announcementTheme, setAnnouncementTheme] = useState<PopUpTheme>(config.announcement?.theme || 'minimal');
+
+  const saveAnnouncementConfig = async () => {
+    setIsSaving(true);
+    await saveConfig({
+      announcement: {
+        title: announcementTitle,
+        message: announcementMessage,
+        theme: announcementTheme,
+        isVisible: true
+      }
+    });
+    setIsSaving(false);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<any | null>(null);
@@ -73,8 +112,25 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
     }
   };
 
+  const loadPremiumData = async () => {
+    setLoading(true);
+    try {
+      const [stats, codes] = await Promise.all([getPremiumStats(), getPromoCodes()]);
+      setPremiumStats(stats);
+      setPromoCodes(codes);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (activeTab === 'users') {
+    if (activeTab === 'dashboard') {
+      setLoading(true);
+      getActivityLogs(10).then(logs => {
+        setActivityLogs(logs);
+        setLoading(false);
+      }).catch(() => setLoading(false));
+    } else if (activeTab === 'users') {
       setLoading(true);
       getAllUsers().then(u => {
         setUsers(u);
@@ -86,8 +142,23 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
         setPosts(p);
         setLoading(false);
       }).catch(() => setLoading(false));
+    } else if (activeTab === 'reports') {
+      setLoading(true);
+      getReports().then(r => {
+        setReports(r);
+        setLoading(false);
+      }).catch(() => setLoading(false));
+    } else if (activeTab === 'system') {
+      loadRecentBroadcasts();
+    } else if (activeTab === 'premium') {
+      loadPremiumData();
     }
   }, [activeTab]);
+
+  const loadRecentBroadcasts = async () => {
+    const broadcasts = await getBroadcasts();
+    setRecentBroadcasts(broadcasts);
+  };
 
   const handleDeletePost = async (id: string) => {
     setDeleteConfirmId(id);
@@ -163,11 +234,14 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
               </div>
             </div>
             
-            <div className="hidden sm:flex bg-white dark:bg-slate-900 rounded-2xl p-1.5 border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div className="hidden sm:flex bg-white dark:bg-slate-900 rounded-2xl p-1.5 border border-slate-200 dark:border-slate-800 shadow-sm">
               <TabButton id="dashboard" label="نظرة عامة" icon={Activity} activeTab={activeTab} setActiveTab={setActiveTab} />
               <TabButton id="users" label="المستخدمين" icon={Users} activeTab={activeTab} setActiveTab={setActiveTab} />
+              <TabButton id="premium" label="البريميوم" icon={Sparkles} activeTab={activeTab} setActiveTab={setActiveTab} />
               <TabButton id="moderation" label="المحتوى" icon={ShieldAlert} activeTab={activeTab} setActiveTab={setActiveTab} />
+              <TabButton id="reports" label="البلاغات" icon={AlertTriangle} activeTab={activeTab} setActiveTab={setActiveTab} />
               <TabButton id="system" label="النظام" icon={Terminal} activeTab={activeTab} setActiveTab={setActiveTab} />
+              <TabButton id="marketing" label="التسويق" icon={TrendingUp} activeTab={activeTab} setActiveTab={setActiveTab} />
             </div>
           </header>
 
@@ -175,7 +249,9 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
           <div className="sm:hidden flex overflow-x-auto no-scrollbar py-2 gap-2">
             <TabButton id="dashboard" label="نظرة عامة" icon={Activity} activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton id="users" label="المستخدمين" icon={Users} activeTab={activeTab} setActiveTab={setActiveTab} />
+            <TabButton id="premium" label="البريميوم" icon={Sparkles} activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton id="moderation" label="المحتوى" icon={ShieldAlert} activeTab={activeTab} setActiveTab={setActiveTab} />
+            <TabButton id="reports" label="البلاغات" icon={AlertTriangle} activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton id="system" label="النظام" icon={Terminal} activeTab={activeTab} setActiveTab={setActiveTab} />
             <TabButton id="marketing" label="التسويق" icon={TrendingUp} activeTab={activeTab} setActiveTab={setActiveTab} />
           </div>
@@ -198,27 +274,91 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* System Health */}
+                {/* Activity Logs Section */}
                 <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm">
                   <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-xl font-black text-slate-900 dark:text-white">أداء النظام</h3>
-                    <div className="px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 text-[10px] font-black rounded-full uppercase tracking-widest">مستقر</div>
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+                      <History className="text-blue-600" size={24} />
+                      آخر النشاطات والتنبيهات
+                    </h3>
+                    <button 
+                      onClick={() => {
+                        setLoading(true);
+                        getActivityLogs(10).then(logs => {
+                          setActivityLogs(logs);
+                          setLoading(false);
+                        });
+                      }}
+                      className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-blue-600 transition-colors"
+                    >
+                      <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+                    </button>
                   </div>
-                  <div className="space-y-8">
-                    <ProgressBar label="استهلاك قاعدة البيانات" percentage={12} color="bg-blue-500" />
-                    <ProgressBar label="استهلاك الذاكرة (RAM)" percentage={45} color="bg-indigo-500" />
-                    <ProgressBar label="معدل الاستجابة (API)" percentage={8} color="bg-emerald-500" />
+                  
+                  <div className="space-y-4">
+                    {loading && activityLogs.length === 0 ? (
+                      <div className="py-12 text-center text-slate-400 font-bold">جاري تحميل النشاطات...</div>
+                    ) : activityLogs.length === 0 ? (
+                      <div className="py-12 text-center text-slate-400 font-bold">لا توجد نشاطات مؤخراً</div>
+                    ) : (
+                      activityLogs.map((log) => {
+                        const isPriceAlert = log.activity_type === 'price_change_notification';
+                        return (
+                          <div key={log.id} className={`p-4 rounded-2xl border transition-all ${isPriceAlert ? 'bg-amber-50/50 dark:bg-amber-900/5 border-amber-100 dark:border-amber-900/20' : 'bg-slate-50 dark:bg-slate-800/30 border-slate-100 dark:border-slate-700'}`}>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isPriceAlert ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                                  {isPriceAlert ? <TrendingUp size={18} /> : <Activity size={18} />}
+                                </div>
+                                <div>
+                                  <div className="text-sm font-black text-slate-900 dark:text-white">
+                                    {isPriceAlert ? 'تنبيه تغيير سعر' : log.activity_type}
+                                  </div>
+                                  <div className="text-[10px] font-bold text-slate-500 mt-0.5">
+                                     المستخدم: {log.app_users?.first_name || 'مستخدم'} {log.app_users?.last_name || ''} (ID: {log.user_id})
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-[10px] font-black text-slate-400 uppercase">
+                                  {formatDistanceToNow(new Date(log.created_at), { addSuffix: true, locale: ar })}
+                                </div>
+                                {isPriceAlert && (
+                                  <div className="text-[10px] font-bold text-amber-600 mt-1">
+                                    صنف: {log.target_id}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
 
-                {/* Quick Actions */}
-                <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm">
-                  <h3 className="text-lg font-black mb-6 text-slate-900 dark:text-white">إجراءات سريعة</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <QuickAction icon={RefreshCw} label="مزامنة" />
-                    <QuickAction icon={ShieldAlert} label="فحص" />
-                    <QuickAction icon={Database} label="نسخ" />
-                    <QuickAction icon={SettingsIcon} label="إعدادات" />
+                {/* Quick Actions (Moved below) */}
+                <div className="flex flex-col gap-8">
+                  <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm">
+                    <h3 className="text-lg font-black mb-6 text-slate-900 dark:text-white">إجراءات سريعة</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <QuickAction icon={RefreshCw} label="مزامنة" />
+                      <QuickAction icon={ShieldAlert} label="فحص" />
+                      <QuickAction icon={Database} label="نسخ" />
+                      <QuickAction icon={SettingsIcon} label="إعدادات" />
+                    </div>
+                  </div>
+                  
+                  {/* System Vital Stats */}
+                  <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-[32px] p-8 text-white shadow-xl shadow-blue-500/20">
+                    <div className="flex items-center gap-3 mb-6">
+                      <Zap size={24} fill="white" />
+                      <h3 className="text-lg font-black tracking-tight">نبض النظام</h3>
+                    </div>
+                    <div className="space-y-6">
+                      <ProgressBar label="قاعدة البيانات" percentage={12} color="bg-white/40" isWhite />
+                      <ProgressBar label="المعالجة (CPU)" percentage={28} color="bg-white/40" isWhite />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -326,6 +466,159 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
             </motion.div>
           )}
 
+          {/* PREMIUM TAB */}
+          {activeTab === 'premium' && (
+            <motion.div key="premium" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+              
+              {/* Premium Overview */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <StatCard icon={Users} label="باقة مجانية" value={premiumStats?.free || 0} color="slate" />
+                <StatCard icon={Sparkles} label="بريميوم (دائم)" value={premiumStats?.premium || 0} color="amber" />
+                <StatCard icon={Clock} label="بريميوم (مؤقت)" value={premiumStats?.temporary || 0} color="indigo" />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Create Promo Code */}
+                <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <h3 className="text-xl font-black mb-6 flex items-center gap-3">
+                    <Zap className="text-amber-500" size={24} />
+                    إنشاء كود برومو جديد
+                  </h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-black text-slate-400 uppercase mb-2 block">الكود</label>
+                      <input 
+                        type="text" 
+                        placeholder="PREMIUM2024" 
+                        value={newPromoCode.code}
+                        onChange={(e) => setNewPromoCode({...newPromoCode, code: e.target.value})}
+                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 font-bold outline-none"
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-black text-slate-400 uppercase mb-2 block">عدد الاستخدامات</label>
+                        <input 
+                          type="number" 
+                          value={newPromoCode.limit}
+                          onChange={(e) => setNewPromoCode({...newPromoCode, limit: parseInt(e.target.value)})}
+                          className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 font-bold outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-black text-slate-400 uppercase mb-2 block">المدة (أيام)</label>
+                        <input 
+                          type="number" 
+                          placeholder="اتركه خالي للدائم"
+                          value={newPromoCode.duration}
+                          onChange={(e) => setNewPromoCode({...newPromoCode, duration: parseInt(e.target.value) || 0})}
+                          className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 font-bold outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-black text-slate-400 uppercase mb-2 block">المميزات المفتوحة</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(PREMIUM_FEATURES).map(([key, label]) => {
+                          const isSelected = selectedFeatures.includes(label);
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                if (isSelected) setSelectedFeatures(selectedFeatures.filter(f => f !== label));
+                                else setSelectedFeatures([...selectedFeatures, label]);
+                              }}
+                              className={`px-4 py-2 rounded-xl text-[10px] font-black transition-all border ${isSelected ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'}`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={async () => {
+                        if (!newPromoCode.code) return;
+                        setIsCreatingPromo(true);
+                        const success = await createPromoCode({
+                          code: newPromoCode.code,
+                          usage_limit: newPromoCode.limit,
+                          duration_days: newPromoCode.duration || null,
+                          features: selectedFeatures
+                        });
+                        if (success) {
+                          addLog(`تم إنشاء كود: ${newPromoCode.code}`);
+                          setNewPromoCode({ code: '', limit: 10, duration: 30 });
+                          setSelectedFeatures([]);
+                          loadPremiumData();
+                        }
+                        setIsCreatingPromo(false);
+                      }}
+                      disabled={isCreatingPromo || !newPromoCode.code}
+                      className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-xl hover:bg-blue-700 transition-all disabled:opacity-50 mt-4"
+                    >
+                      {isCreatingPromo ? 'جاري الإنشاء...' : 'إنشاء الكود'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Active Promo Codes */}
+                <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+                  <h3 className="text-xl font-black mb-6 flex items-center gap-3">
+                    <History className="text-indigo-500" size={24} />
+                    أكواد البرومو النشطة
+                  </h3>
+                  
+                  <div className="flex-1 overflow-y-auto pr-2 space-y-4 max-h-[500px] no-scrollbar">
+                    {promoCodes.length === 0 ? (
+                      <div className="text-center py-20 text-slate-400 font-bold">لا يوجد أكواد نشطة</div>
+                    ) : (
+                      promoCodes.map(code => (
+                        <div key={code.id} className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 group hover:border-blue-500/30 transition-all">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-black tracking-widest">{code.code}</span>
+                              <span className="text-[10px] font-bold text-slate-400">{code.duration_days ? `${code.duration_days} يوم` : 'دائم'}</span>
+                            </div>
+                            <button 
+                              onClick={async () => {
+                                if (confirm('حذف الكود؟')) {
+                                  await deletePromoCode(code.id);
+                                  loadPremiumData();
+                                }
+                              }}
+                              className="w-8 h-8 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-rose-500 hover:bg-rose-50 transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="text-[10px] font-bold text-slate-500">الاستخدام: {code.current_usage} / {code.usage_limit}</div>
+                            <div className="w-24 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                              <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, (code.current_usage / code.usage_limit) * 100)}%` }} />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1">
+                            {code.features?.map((f: string) => (
+                              <span key={f} className="text-[9px] font-black px-1.5 py-0.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-md">{f}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+            </motion.div>
+          )}
+
           {/* MODERATION TAB */}
           {activeTab === 'moderation' && (
             <motion.div key="moderation" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
@@ -347,9 +640,10 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                       const isLike = post.content.startsWith('__LIKE__');
                       const isTrust = post.content.startsWith('__TRUST__');
                       const isAdminTrust = post.content.startsWith('__ADMIN_TRUST__');
+                      const isBroadcast = post.content.startsWith('__BROADCAST__');
                       
                       // Skip internal system logs and comments (comments will be nested)
-                      if (isProfile || isLike || isComment || isTrust || isAdminTrust) return null; 
+                      if (isProfile || isLike || isComment || isTrust || isAdminTrust || isBroadcast) return null; 
 
                       const postComments = posts.filter(p => p.content.startsWith(`__COMMENT__${post.id}__`));
 
@@ -365,7 +659,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                             </div>
                             <div className="flex items-center gap-2 w-full sm:w-auto">
                               <button 
-                                onClick={() => window.open(`/post/${post.id}`, '_blank')}
+                                onClick={() => onViewPost && onViewPost(post.id)}
                                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl font-black text-xs hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all active:scale-95"
                               >
                                 <ExternalLink size={14} />
@@ -423,10 +717,90 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
             </motion.div>
           )}
 
+          {/* REPORTS TAB */}
+          {activeTab === 'reports' && (
+            <motion.div key="reports" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+              <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <h3 className="text-xl font-black mb-6 flex items-center gap-3">
+                  <AlertTriangle className="text-rose-500" size={24} /> 
+                  البلاغات الواردة
+                </h3>
+
+                {loading ? (
+                  <div className="flex justify-center py-12"><RefreshCw className="animate-spin text-blue-600" size={32} /></div>
+                ) : reports.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">لا يوجد بلاغات جديدة</div>
+                ) : (
+                  <div className="space-y-4">
+                    {reports.map((report: any) => (
+                      <div key={report.id} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="text-sm font-black">{report.reason}</p>
+                            <span className="text-[10px] text-slate-400 font-bold">بواسطة: {report.app_users?.first_name || 'مستخدم'} {report.app_users?.last_name || ''}</span>
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-bold">{new Date(report.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
           {/* MARKETING TAB */}
           {activeTab === 'marketing' && (
-            <motion.div key="marketing" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+            <motion.div key="marketing" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-8">
+              {/* Promotional Links & Stats */}
               <MarketingView currentUser={currentUser} />
+
+              {/* Pop-up Announcement Config */}
+              <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <h3 className="text-xl font-black mb-6 flex items-center gap-3">
+                  <Bell className="text-blue-500" size={24} />
+                  إعدادات الإعلان المنبثق (Pop-up)
+                </h3>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <input 
+                      type="text" 
+                      placeholder="عنوان الإعلان" 
+                      value={announcementTitle}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 font-bold outline-none"
+                      onChange={(e) => setAnnouncementTitle(e.target.value)}
+                    />
+                    <textarea 
+                      placeholder="نص الإعلان..." 
+                      value={announcementMessage}
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 font-bold outline-none h-32"
+                      onChange={(e) => setAnnouncementMessage(e.target.value)}
+                    />
+                    <select 
+                      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 font-bold outline-none"
+                      value={announcementTheme}
+                      onChange={(e) => setAnnouncementTheme(e.target.value as PopUpTheme)}
+                    >
+                      <option value="minimal">شكل بسيط (Minimal)</option>
+                      <option value="vibrant">شكل حيوي (Vibrant)</option>
+                      <option value="action">شكل تفاعلي (Action)</option>
+                    </select>
+                    <button 
+                      onClick={saveAnnouncementConfig}
+                      disabled={isSaving}
+                      className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm shadow-xl hover:bg-blue-700 transition-all disabled:opacity-50"
+                    >
+                      {isSaving ? 'جاري الحفظ...' : 'حفظ ونشر الإعلان'}
+                    </button>
+                  </div>
+                  
+                  <div className="bg-slate-50 dark:bg-slate-800 rounded-3xl p-6 flex flex-col items-center justify-center">
+                    <p className="text-[10px] font-black text-slate-400 uppercase mb-4">معاينة</p>
+                    <PopUpPreview theme={announcementTheme} title={announcementTitle || 'عنوان الإعلان'} message={announcementMessage || 'هنا سيظهر نص الإعلان الخاص بك ليراه المستخدمون.'} />
+                  </div>
+                </div>
+              </div>
             </motion.div>
           )}
 
@@ -446,7 +820,7 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                   </span>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <SystemAction 
                     label="وضع الصيانة" 
                     description="إغلاق التطبيق للصيانة والتحديثات" 
@@ -462,14 +836,6 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                     active={config.liveSync} 
                     onClick={() => saveConfig({liveSync: !config.liveSync})} 
                     color="blue"
-                  />
-                  <SystemAction 
-                    label="التحليل بالذكاء الاصطناعي" 
-                    description="تفعيل ميزات AI في البحث والتحليل" 
-                    icon={Bot} 
-                    active={config.aiAnalysis} 
-                    onClick={() => saveConfig({aiAnalysis: !config.aiAnalysis})} 
-                    color="indigo"
                   />
                   <SystemAction 
                     label="الوضع الصارم (Strict Mode)" 
@@ -518,17 +884,21 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                     </div>
                     
                     <button 
-                      onClick={() => { 
+                      onClick={async () => { 
                         if (!broadcastTitle || !broadcastMessage) return;
                         setIsBroadcasting(true);
-                        setTimeout(() => {
+                        const success = await sendBroadcastSupabase(broadcastTitle, broadcastMessage);
+                        if (success) {
                           addLog(`إرسال بث عام: ${broadcastTitle}`);
-                          setIsBroadcasting(false);
                           setBroadcastSuccess(true);
                           setBroadcastTitle('');
                           setBroadcastMessage('');
+                          loadRecentBroadcasts();
                           setTimeout(() => setBroadcastSuccess(false), 3000);
-                        }, 1500);
+                        } else {
+                          addLog(`فشل إرسال البث: ${broadcastTitle}`);
+                        }
+                        setIsBroadcasting(false);
                       }} 
                       disabled={isBroadcasting || !broadcastTitle || !broadcastMessage}
                       className="w-full py-5 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 rounded-2xl font-black text-sm flex items-center justify-center gap-3 active:scale-[0.98] transition-all shadow-xl shadow-blue-600/20 text-white group"
@@ -543,6 +913,91 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                       {isBroadcasting ? 'جاري معالجة البث...' : broadcastSuccess ? 'تم الإرسال بنجاح' : 'إطلاق البث الآن'}
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* Recent Broadcasts List */}
+              <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm transition-all">
+                <h3 className="text-xl font-black mb-6 flex items-center gap-3 text-slate-900 dark:text-white">
+                  <History className="text-blue-500" size={24} /> 
+                  البث الأخير
+                </h3>
+
+                <div className="space-y-4">
+                  {recentBroadcasts.length === 0 ? (
+                    <div className="text-center py-10 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 text-slate-400 font-bold italic">
+                      لا توجد سجلات بث سابقة
+                    </div>
+                  ) : (
+                    recentBroadcasts.map((b) => (
+                      <div key={b.id} className="group p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-900/40 transition-all">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">BROADCAST</span>
+                              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
+                                {formatDistanceToNow(new Date(b.timestamp), { addSuffix: true, locale: ar })}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-black text-slate-900 dark:text-white mb-1">{b.title}</h4>
+                            <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">{b.message}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {broadcastConfirmDelete === b.id ? (
+                              <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-2 duration-200">
+                                <button
+                                  onClick={() => setBroadcastConfirmDelete(null)}
+                                  className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-[10px] font-black hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+                                >
+                                  إلغاء
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    setIsDeletingBroadcast(b.id);
+                                    const success = await deleteBroadcast(b.id);
+                                    if (success) {
+                                      addLog(`حذف البث: ${b.title}`);
+                                      loadRecentBroadcasts();
+                                    }
+                                    setIsDeletingBroadcast(null);
+                                    setBroadcastConfirmDelete(null);
+                                  }}
+                                  disabled={isDeletingBroadcast === b.id}
+                                  className="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-[10px] font-black hover:bg-rose-500 transition-colors shadow-sm"
+                                >
+                                  {isDeletingBroadcast === b.id ? <RefreshCw size={12} className="animate-spin" /> : 'تأكيد الحذف'}
+                                </button>
+                              </div>
+                            ) : (
+                              <button 
+                                onClick={() => setBroadcastConfirmDelete(b.id)}
+                                className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-rose-500 hover:border-rose-100 dark:hover:border-rose-900/30 transition-all shadow-sm active:scale-95"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* System Logs */}
+              <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800 shadow-sm">
+                <h3 className="text-xl font-black mb-6 flex items-center gap-3 text-slate-900 dark:text-white">
+                  <AlertTriangle className="text-rose-500" size={24} /> 
+                  البلاغات
+                </h3>
+                <div className="p-4 bg-rose-50 dark:bg-rose-900/20 rounded-2xl flex items-center justify-between border border-rose-100 dark:border-rose-900/30">
+                  <p className="text-sm font-bold text-rose-800 dark:text-rose-300">يمكنك مشاهدة البلاغات في تبويب البلاغات الخاص</p>
+                  <button 
+                    onClick={() => setActiveTab('reports')}
+                    className="px-4 py-2 bg-rose-600 text-white text-xs font-black rounded-xl hover:bg-rose-700 transition"
+                  >
+                    عرض البلاغات
+                  </button>
                 </div>
               </div>
 
@@ -706,6 +1161,38 @@ export const AdminView: React.FC<AdminViewProps> = ({ onBack, drugsCount, config
                   </div>
                 </section>
 
+                {/* Verification Toggle */}
+                <section>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 block">توثيق الحساب</label>
+                  <button 
+                    onClick={async () => {
+                      setIsSaving(true);
+                      const isVerified = selectedUserForEdit.is_verified || false;
+                      const next = !isVerified;
+                      
+                      // Using the persistent top-level field in app_users via updateUserPermissions
+                      await updateUserPermissions(selectedUserForEdit.id, { is_verified: next });
+                      
+                      setSelectedUserForEdit({ ...selectedUserForEdit, is_verified: next });
+                      updateUserInList(selectedUserForEdit.id, { is_verified: next });
+                      addLog(`${next ? 'تم توثيق' : 'إلغاء توثيق'} حساب ${selectedUserForEdit.first_name}`);
+                      setIsSaving(false);
+                    }}
+                    className={`w-full flex items-center justify-between p-5 rounded-2xl border transition-all ${selectedUserForEdit.is_verified ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-600' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedUserForEdit.is_verified ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                        <VerifiedBadge size={18} />
+                      </div>
+                      <div className="text-right">
+                        <span className="text-sm font-black block">علامة التوثيق</span>
+                        <span className="text-[9px] font-bold opacity-60">تظهر علامة فيسبوك الزرقاء بجانب اسم المستخدم</span>
+                      </div>
+                    </div>
+                    {selectedUserForEdit.is_verified ? <p className="text-[10px] font-black uppercase">موثق</p> : <p className="text-[10px] font-black uppercase">غير موثق</p>}
+                  </button>
+                </section>
+
                 {/* Restricted Pages */}
                 <section>
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 block">تقييد الوصول للصفحات</label>
@@ -789,6 +1276,7 @@ const StatCard = ({ icon: Icon, label, value, color }: any) => {
     indigo: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400 border-indigo-100 dark:border-indigo-800/50',
     emerald: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800/50',
     amber: 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400 border-amber-100 dark:border-amber-800/50',
+    slate: 'bg-slate-50 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-100 dark:border-slate-700',
   };
 
   return (
@@ -804,18 +1292,25 @@ const StatCard = ({ icon: Icon, label, value, color }: any) => {
   );
 };
 
+const QuickAction = ({ icon: Icon, label }: any) => (
+  <button className="flex flex-col items-center justify-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+    <Icon size={20} className="text-slate-600 dark:text-slate-400" />
+    <span className="text-[10px] font-black text-slate-700 dark:text-slate-300">{label}</span>
+  </button>
+);
+
 const ProgressBar = ({ label, percentage, color }: any) => (
   <div>
-    <div className="flex justify-between text-xs font-black mb-2">
-      <span className="text-slate-600 dark:text-slate-400">{label}</span>
-      <span className="text-slate-900 dark:text-white">{percentage}%</span>
+    <div className="flex justify-between text-[10px] font-black text-slate-400 mb-2 uppercase">
+      <span>{label}</span>
+      <span>{percentage}%</span>
     </div>
     <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
       <motion.div 
+        className={`h-full ${color}`} 
         initial={{ width: 0 }} 
         animate={{ width: `${percentage}%` }} 
         transition={{ duration: 1, ease: "easeOut" }}
-        className={`h-full rounded-full ${color}`} 
       />
     </div>
   </div>
@@ -852,7 +1347,7 @@ const SystemAction = ({ label, description, icon: Icon, active, onClick, color =
       </div>
       <div className={`w-12 h-6 rounded-full p-1 transition-all flex items-center shrink-0 ${active ? colorMap[color] : 'bg-slate-200 dark:bg-slate-700'}`}>
         <motion.div 
-          animate={{ x: active ? 24 : 0 }} 
+          animate={{ x: active ? -24 : 0 }} 
           transition={{ type: 'spring', stiffness: 500, damping: 30 }} 
           className="w-4 h-4 bg-white rounded-full shadow-md" 
         />
@@ -860,10 +1355,3 @@ const SystemAction = ({ label, description, icon: Icon, active, onClick, color =
     </div>
   );
 };
-
-const QuickAction = ({ icon: Icon, label }: any) => (
-  <button className="flex flex-col items-center justify-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
-    <Icon size={20} className="text-slate-600 dark:text-slate-400" />
-    <span className="text-[10px] font-black text-slate-700 dark:text-slate-300">{label}</span>
-  </button>
-);

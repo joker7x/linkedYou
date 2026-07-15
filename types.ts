@@ -1,5 +1,5 @@
 
-export type AppView = 'home' | 'settings' | 'admin' | 'invoice' | 'shortages' | 'community' | 'profile' | 'analytics' | 'market_shortages';
+export type AppView = 'home' | 'settings' | 'admin' | 'invoice' | 'shortages' | 'community' | 'profile' | 'analytics' | 'market_shortages' | 'premium_upgrade';
 export type TabMode = 'all' | 'changed' | 'fav';
 
 export interface Experience {
@@ -34,6 +34,9 @@ export interface CommunityUser {
   skills?: string[];
   pharmacyName?: string;
   contactInfo?: string;
+  premiumTier?: 'free' | 'premium' | 'temporary';
+  premiumUntil?: string;
+  unlockedFeatures?: string[];
 }
 
 export interface CommunityPost {
@@ -100,8 +103,34 @@ export interface AdminConfig {
   maintenanceTime: string;
   liveSync: boolean;
   strictMode: boolean;
-  aiAnalysis?: boolean;
   marketCheck?: boolean;
+  announcement?: AnnouncementConfig;
+  premiumFeatures?: string[];
+}
+
+export interface PromoCode {
+  id: string;
+  code: string;
+  usage_limit: number;
+  current_usage: number;
+  duration_days: number | null;
+  features: string[];
+  created_at: string;
+}
+
+export interface PremiumStats {
+  free: number;
+  premium: number;
+  temporary: number;
+  totalCodes: number;
+  totalRedemptions: number;
+}
+
+export interface AnnouncementConfig {
+  title: string;
+  message: string;
+  theme: 'minimal' | 'vibrant' | 'action';
+  isVisible: boolean;
 }
 
 export interface InvoiceItem {
@@ -130,21 +159,12 @@ export interface StockItem {
 }
 
 /**
- * Added missing interface for simplified drug analysis.
+ * Added missing interface for simplified drug data.
  */
 export interface LightDrug {
   drug_no: string;
   name_en: string;
   price_new: number | null;
-}
-
-/**
- * Added missing interface for AI-driven market analysis results.
- */
-export interface DeepMarketAnalysis {
-  sentiment: string;
-  trend: string;
-  recommendation: string;
 }
 
 /**

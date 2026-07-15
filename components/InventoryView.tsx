@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Trash2, Package, TrendingUp, AlertTriangle, Search, Clock, CheckCircle2, TrendingDown, Plus } from 'lucide-react';
+import { Trash2, Package, TrendingUp, AlertTriangle, Search, Clock, CheckCircle2, TrendingDown, Plus, ChevronRight } from 'lucide-react';
 import { StockItem, Drug } from '../types.ts';
 import { getStock, addStockItem, searchDrugsSupabase, deleteStockItem, getDrugsByIds, logActivity } from '../services/supabase.ts';
 
@@ -267,12 +267,20 @@ export const InventoryView: React.FC<InventoryViewProps> = ({ onBack, allDrugs, 
     <div className="pt-14 px-4 pb-32 min-h-screen bg-slate-50 dark:bg-slate-950" dir="rtl">
       <header className="flex items-center justify-between mb-8 pt-4 px-2">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-[20px] bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
-            <Package size={24} strokeWidth={2.5} />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">مخزون الصيدلية</h1>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">إدارة ذكية للأصناف</p>
+          <button 
+            onClick={onBack}
+            className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-400 shadow-sm active:scale-95 transition-all"
+          >
+            <ChevronRight size={20} />
+          </button>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-[20px] bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
+              <Package size={24} strokeWidth={2.5} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">مخزون الصيدلية</h1>
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-0.5">إدارة ذكية للأصناف</p>
+            </div>
           </div>
         </div>
         <button 

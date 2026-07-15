@@ -1,7 +1,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY, MAIN_TABLE, BOT_USERNAME } from '../constants.ts';
-import { Drug, PromoLink, PromoVisit } from '../types.ts';
+import { Drug, PromoLink, PromoVisit, PromoCode, PremiumStats } from '../types.ts';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -71,6 +71,25 @@ export const reportUser = async (targetUserId: string, reportedBy: string, reaso
     action_taken: 'report'
   });
   return !error;
+};
+
+export const addReport = async (userId: string, targetId: string | null, type: 'post' | 'price' | 'other', reason: string, contactInfo: string) => {
+  const { error } = await supabase.from('moderation_logs').insert({
+    user_id: userId,
+    reported_by: targetId || 'system',
+    reason: `Type: ${type}, Reason: ${reason}, Contact: ${contactInfo}`,
+    action_taken: 'report'
+  });
+  return !error;
+};
+
+export const getReports = async () => {
+  const { data, error } = await supabase
+    .from('moderation_logs')
+    .select('*, app_users!moderation_logs_user_id_fkey(first_name, last_name)')
+    .eq('action_taken', 'report')
+    .order('created_at', { ascending: false });
+  return error ? [] : data;
 };
 
 export const banUser = async (targetUserId: string, adminId: string, reason: string) => {
@@ -344,6 +363,7 @@ export const updateUserPermissions = async (userId: number, updates: any): Promi
     // Top-level fields
     if ('is_admin' in updates) body.is_admin = updates.is_admin;
     if ('is_premium' in updates) body.is_premium = updates.is_premium;
+    if ('is_verified' in updates) body.is_verified = updates.is_verified;
     
     // 3. Save to app_users (Primary Source)
     await supabase.from('app_users').update(body).eq('id', userId);
@@ -365,7 +385,7 @@ export const syncDrugPrice = async (drugNo: string, newPrice: number) => {
     // 1. Get current drug to check price
     const { data: currentDrug, error: fetchError } = await supabase
       .from(MAIN_TABLE)
-      .select('price_new')
+      .select('id, price_new, name_en, name_ar')
       .eq('drug_no', drugNo)
       .maybeSingle();
 
@@ -373,6 +393,8 @@ export const syncDrugPrice = async (drugNo: string, newPrice: number) => {
 
     // 2. If price changed, update drug and add to history
     if (currentDrug.price_new !== newPrice) {
+      const oldPrice = currentDrug.price_new;
+      
       // Add to history
       await supabase.from('price_history').insert({
         drug_no: drugNo,
@@ -382,6 +404,28 @@ export const syncDrugPrice = async (drugNo: string, newPrice: number) => {
       
       // Update main table
       await supabase.from(MAIN_TABLE).update({ price_new: newPrice }).eq('drug_no', drugNo);
+
+      // --- New: Notify users who have this drug in stock ---
+      const { data: usersWithStock } = await supabase
+        .from('pharmacy_stock')
+        .select('user_id')
+        .eq('drug_id', currentDrug.id);
+
+      if (usersWithStock && usersWithStock.length > 0) {
+        // Collect unique users to notified
+        const recipientIds = [...new Set(usersWithStock.map(s => s.user_id))];
+        
+        for (const uid of recipientIds) {
+          await sendPriceAlert(uid, {
+            drugNo,
+            name_en: currentDrug.name_en,
+            name_ar: currentDrug.name_ar,
+            oldPrice,
+            newPrice,
+            updateTime: new Date().toISOString()
+          });
+        }
+      }
     }
   } catch (err) {
     console.error("Error in syncDrugPrice:", err);
@@ -401,6 +445,26 @@ export const checkUserBan = (user: any): { isBanned: boolean; reason?: string; u
   }
   
   return { isBanned: false };
+};
+
+export const getRecentlyChangedDrugs = async (limit = 20): Promise<Drug[]> => {
+  try {
+    // We want price_new != price_old
+    // Since Supabase doesn't support comparing columns easily, we fetch 100 recent updates and filter
+    const { data, error } = await supabase
+      .from(MAIN_TABLE)
+      .select('*')
+      .order('fetched_at', { ascending: false })
+      .limit(100);
+      
+    if (error) return [];
+    
+    return (data || [])
+      .filter(d => d.price_new !== null && d.price_old !== null && d.price_new !== d.price_old)
+      .slice(0, limit);
+  } catch (e) {
+    return [];
+  }
 };
 
 export const getDrugsByIds = async (ids: number[]): Promise<Drug[]> => {
@@ -461,21 +525,28 @@ export const addStockItem = async (item: any, userId: string): Promise<any> => {
 };
 
 export const getPosts = async (userId: string): Promise<any[]> => {
-  const { data, error } = await supabase
-    .from('posts')
-    .select('*')
-    .not('content', 'ilike', '__COMMENT__%')
-    .not('content', 'ilike', '__LIKE__%')
-    .not('content', 'ilike', '__PROFILE__%')
-    .not('content', 'ilike', '__TRUST__%')
-    .not('content', 'ilike', '__ADMIN_TRUST__%')
-    .order('created_at', { ascending: false });
-  
-  if (error) {
-    console.error("Error fetching posts:", error);
-    return [];
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*')
+      .not('content', 'ilike', '__COMMENT__%')
+      .not('content', 'ilike', '__LIKE__%')
+      .not('content', 'ilike', '__PROFILE__%')
+      .not('content', 'ilike', '__TRUST__%')
+      .not('content', 'ilike', '__ADMIN_TRUST__%')
+      .not('content', 'ilike', '__BROADCAST__%')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error("Supabase error fetching posts (getPosts):", error);
+      throw error;
+    }
+    return data || [];
+  } catch (error) {
+    console.error("Critical error in getPosts:", error);
+    // Return empty array but trigger catch in caller for UI error handling
+    throw error;
   }
-  return data || [];
 };
 
 const generateUUID = () => {
@@ -751,12 +822,53 @@ export const getIsLiked = async (postId: string, userId: string): Promise<boolea
   }
 };
 
+export const getBatchPostsMetadata = async (postIds: string[], userId: string): Promise<Record<string, { likes: number, commentsCount: number, isLiked: boolean }>> => {
+  if (!postIds || postIds.length === 0) return {};
+
+  const metadata: Record<string, { likes: number, commentsCount: number, isLiked: boolean }> = {};
+  postIds.forEach(id => {
+    metadata[id] = { likes: 0, commentsCount: 0, isLiked: false };
+  });
+
+  try {
+    // Optimization: Fetch all like and comment records for these posts in one query
+    const { data, error } = await supabase
+      .from('posts')
+      .select('user_id, content')
+      .or(`content.ilike.__LIKE__%,content.ilike.__COMMENT__%`); // Broad fetch, then filter in JS for efficiency
+
+    if (error || !data) return metadata;
+
+    data.forEach(item => {
+      if (item.content.startsWith('__LIKE__')) {
+        const postId = item.content.replace('__LIKE__', '');
+        if (metadata[postId]) {
+          metadata[postId].likes++;
+          if (item.user_id === userId) metadata[postId].isLiked = true;
+        }
+      } else if (item.content.startsWith('__COMMENT__')) {
+        const parts = item.content.split('__');
+        const postId = parts[2];
+        if (metadata[postId]) {
+          metadata[postId].commentsCount++;
+        }
+      }
+    });
+  } catch (e) {
+    console.error("Error in getBatchPostsMetadata:", e);
+  }
+
+  return metadata;
+};
+
 export const getUserProfile = async (userId: string): Promise<any> => {
   const { data, error } = await supabase
     .from('posts')
     .select('content')
     .eq('user_id', userId)
     .ilike('content', '__PROFILE__%')
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
     
   if (error || !data) return null;
@@ -775,38 +887,68 @@ export const getUserProfiles = async (userIds: string[]): Promise<Record<string,
   
   const { data, error } = await supabase
     .from('posts')
-    .select('user_id, content')
+    .select('user_id, content, created_at')
     .in('user_id', uniqueIds)
-    .ilike('content', '__PROFILE__%');
+    .ilike('content', '__PROFILE__%')
+    .order('created_at', { ascending: false });
     
   if (error || !data) return {};
   
   const profiles: Record<string, any> = {};
   data.forEach(item => {
-    try {
-      profiles[item.user_id] = JSON.parse(item.content.replace('__PROFILE__', ''));
-    } catch (e) {
-      // ignore
+    // Only take the first one we find for each user_id (which is the latest because of the order)
+    if (!profiles[item.user_id]) {
+      try {
+        profiles[item.user_id] = JSON.parse(item.content.replace('__PROFILE__', ''));
+      } catch (e) {
+        // ignore
+      }
     }
   });
+
+  // Fetch true is_verified status from app_users
+  const { data: usersData } = await supabase
+    .from('app_users')
+    .select('id, is_verified')
+    .in('id', uniqueIds);
+
+  if (usersData) {
+    usersData.forEach(u => {
+      if (profiles[u.id]) {
+        profiles[u.id].isVerified = u.is_verified || false;
+      } else {
+        profiles[u.id] = { isVerified: u.is_verified || false };
+      }
+    });
+  }
+
   return profiles;
 };
 
 export const updateUserProfile = async (userId: string, profile: any): Promise<boolean> => {
-  const content = `__PROFILE__${JSON.stringify(profile)}`;
+  const existingProfile = await getUserProfile(userId);
+  const mergedProfile = { ...(existingProfile || {}), ...profile };
+  const content = `__PROFILE__${JSON.stringify(mergedProfile)}`;
   
-  const { data: existing } = await supabase
+  const { data: existingProfiles } = await supabase
     .from('posts')
     .select('id')
     .eq('user_id', userId)
-    .ilike('content', '__PROFILE__%')
-    .maybeSingle();
+    .ilike('content', '__PROFILE__%');
     
-  if (existing) {
+  if (existingProfiles && existingProfiles.length > 0) {
+    // Keep the first one and update it, delete others
+    const idToUpdate = existingProfiles[0].id;
+    const idsToDelete = existingProfiles.slice(1).map(p => p.id);
+    
+    if (idsToDelete.length > 0) {
+        await supabase.from('posts').delete().in('id', idsToDelete);
+    }
+    
     const { error } = await supabase
       .from('posts')
       .update({ content })
-      .eq('id', existing.id);
+      .eq('id', idToUpdate);
     return !error;
   } else {
     const id = generateUUID();
@@ -819,6 +961,262 @@ export const updateUserProfile = async (userId: string, profile: any): Promise<b
         created_at: new Date().toISOString()
       });
     return !error;
+  }
+};
+
+// --- Global Broadcast / Notifications ---
+export const sendBroadcast = async (title: string, message: string): Promise<boolean> => {
+  try {
+    const id = generateUUID();
+    const content = `__BROADCAST__${JSON.stringify({ title, message })}`;
+    const { error } = await supabase
+      .from('posts')
+      .insert({
+        id,
+        user_id: 'SYSTEM',
+        content,
+        created_at: new Date().toISOString()
+      });
+    return !error;
+  } catch (e) {
+    return false;
+  }
+};
+
+export const getBroadcasts = async (userId?: string): Promise<any[]> => {
+  try {
+    let query = supabase.from('posts').select('*');
+    
+    if (userId) {
+      // Fetch system broadcasts OR alerts specifically for this user
+      // Since posts are usually authored by the user_id, 
+      // alerts are posts where system is talking TO the user (encoded in user_id for simplicity)
+      query = query.or(`content.ilike.__BROADCAST__%,and(user_id.eq.${userId},content.ilike.__PRICE_ALERT__%)`);
+    } else {
+      query = query.ilike('content', '__BROADCAST__%');
+    }
+
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .limit(20);
+    
+    if (error || !data) return [];
+    
+    return data.map(item => {
+      try {
+        const isAlert = item.content.startsWith('__PRICE_ALERT__');
+        const prefix = isAlert ? '__PRICE_ALERT__' : '__BROADCAST__';
+        const payload = JSON.parse(item.content.replace(prefix, ''));
+        return {
+          id: item.id,
+          type: isAlert ? 'price_alert' : 'broadcast',
+          ...payload,
+          timestamp: item.created_at
+        };
+      } catch (e) {
+        return null;
+      }
+    }).filter(Boolean);
+  } catch (e) {
+    return [];
+  }
+};
+
+export const sendPriceAlert = async (userId: string, data: any): Promise<boolean> => {
+  try {
+    const id = generateUUID();
+    const content = `__PRICE_ALERT__${JSON.stringify(data)}`;
+    
+    // 1. Create the alert post
+    const { error: postError } = await supabase
+      .from('posts')
+      .insert({
+        id,
+        user_id: userId,
+        content,
+        created_at: new Date().toISOString()
+      });
+      
+    if (postError) return false;
+
+    // 2. Log in activity for admin transparency
+    await supabase.from('user_activities').insert({
+      user_id: userId,
+      activity_type: 'price_change_notification',
+      points_earned: 0,
+      target_id: data.drugNo
+    });
+
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+export const deleteBroadcast = async (broadcastId: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', broadcastId);
+    return !error;
+  } catch (e) {
+    return false;
+  }
+};
+
+// --- Premium & Promo Code System ---
+export const createPromoCode = async (promo: Omit<PromoCode, 'id' | 'created_at' | 'current_usage'>): Promise<boolean> => {
+  try {
+    const id = generateUUID();
+    const content = `__PROMO__${JSON.stringify({ ...promo, current_usage: 0 })}`;
+    const { error } = await supabase
+      .from('posts')
+      .insert({
+        id,
+        user_id: 'SYSTEM',
+        content,
+        created_at: new Date().toISOString()
+      });
+    return !error;
+  } catch (e) {
+    return false;
+  }
+};
+
+export const getPromoCodes = async (): Promise<PromoCode[]> => {
+  try {
+    const { data: rawData, error } = await supabase
+      .from('posts')
+      .select('*')
+      .ilike('content', '__PROMO__%')
+      .order('created_at', { ascending: false });
+    
+    if (error || !rawData) return [];
+    
+    return rawData.map(item => {
+      try {
+        const payload = JSON.parse(item.content.replace('__PROMO__', ''));
+        return {
+          id: item.id,
+          ...payload,
+          created_at: item.created_at
+        };
+      } catch (e) {
+        return null;
+      }
+    }).filter(Boolean) as PromoCode[];
+  } catch (e) {
+    return [];
+  }
+};
+
+export const deletePromoCode = async (id: string): Promise<boolean> => {
+  const { error } = await supabase.from('posts').delete().eq('id', id);
+  return !error;
+};
+
+export const redeemPromoCode = async (userId: string, code: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    const codes = await getPromoCodes();
+    const target = codes.find(c => c.code === code);
+    
+    if (!target) return { success: false, message: 'كود غير صحيح' };
+    
+    if (target.current_usage >= target.usage_limit) {
+      return { success: false, message: 'تم استهلاك الحد الأقصى لهذا الكود' };
+    }
+    
+    const userProfile = await getUserProfile(userId);
+    
+    // Check if code was already used by this user in logs (moderation or sessions?)
+    // For now, simple check.
+    
+    const updatedPayload = { 
+      ...target, 
+      current_usage: (target.current_usage || 0) + 1
+    };
+    // @ts-ignore
+    delete updatedPayload.id;
+    // @ts-ignore
+    delete updatedPayload.created_at;
+
+    const { error: updateError } = await supabase
+      .from('posts')
+      .update({ content: `__PROMO__${JSON.stringify(updatedPayload)}` })
+      .eq('id', target.id);
+      
+    if (updateError) return { success: false, message: 'حدث خطأ أثناء تفعيل الكود' };
+    
+    const now = new Date();
+    const premiumUntil = target.duration_days 
+      ? new Date(now.getTime() + target.duration_days * 24 * 60 * 60 * 1000).toISOString()
+      : undefined;
+      
+    const updatedProfile = {
+      ...(userProfile || {}),
+      premiumTier: target.duration_days ? 'temporary' : 'premium',
+      premiumUntil,
+      unlockedFeatures: target.features
+    };
+    
+    await updateUserProfile(userId, updatedProfile);
+    
+    return { success: true, message: 'تم تفعيل البريميوم بنجاح' };
+  } catch (e) {
+    console.error('Redeem error:', e);
+    return { success: false, message: 'خطأ غير متوقع' };
+  }
+};
+
+export const getPremiumStats = async (): Promise<PremiumStats> => {
+  try {
+    const { data: allProfiles } = await supabase
+      .from('posts')
+      .select('content')
+      .ilike('content', '__PROFILE__%');
+      
+    const stats: PremiumStats = {
+      free: 0,
+      premium: 0,
+      temporary: 0,
+      totalCodes: 0,
+      totalRedemptions: 0
+    };
+    
+    if (allProfiles) {
+      allProfiles.forEach(p => {
+        try {
+          const profile = JSON.parse(p.content.replace('__PROFILE__', ''));
+          if (profile.premiumTier === 'premium') stats.premium++;
+          else if (profile.premiumTier === 'temporary') stats.temporary++;
+          else stats.free++;
+        } catch (e) {}
+      });
+    }
+    
+    const codes = await getPromoCodes();
+    stats.totalCodes = codes.length;
+    stats.totalRedemptions = codes.reduce((acc, c) => acc + (c.current_usage || 0), 0);
+    
+    return stats;
+  } catch (e) {
+    return { free: 0, premium: 0, temporary: 0, totalCodes: 0, totalRedemptions: 0 };
+  }
+};
+
+export const getActivityLogs = async (limit = 50): Promise<any[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('user_activities')
+      .select('*, app_users(first_name, last_name)')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    
+    if (error) return [];
+    return data;
+  } catch (e) {
+    return [];
   }
 };
 

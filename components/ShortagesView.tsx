@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { AlertTriangle, Clock, CheckCircle2, ArrowRight, Search, Filter, PackageX, TrendingDown, PackageCheck, Award } from 'lucide-react';
+import { AlertTriangle, Clock, CheckCircle2, ArrowRight, Search, Filter, PackageX, TrendingDown, PackageCheck, Award, Lock, Sparkles } from 'lucide-react';
+import { CommunityUser } from '../types.ts';
+import { hasAccess } from '../lib/accessControl.ts';
 
 interface ShortagesViewProps {
   onBack: () => void;
+  user: CommunityUser | null;
 }
 
 type ShortageTab = 'current' | 'expected' | 'available';
@@ -45,10 +48,12 @@ const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab, count }: an
   );
 };
 
-export const ShortagesView: React.FC<ShortagesViewProps> = ({ onBack }) => {
+export const ShortagesView: React.FC<ShortagesViewProps> = ({ onBack, user }) => {
   const MDiv = motion.div as any;
   const [activeTab, setActiveTab] = useState<ShortageTab>('current');
   const [searchQuery, setSearchQuery] = useState('');
+
+  const isAccessAllowed = hasAccess(user, 'SHORTAGES');
 
   const filteredItems = mockShortages.filter(item => 
     item.status === activeTab && 
@@ -63,7 +68,7 @@ export const ShortagesView: React.FC<ShortagesViewProps> = ({ onBack }) => {
     }
   };
 
-  const getLevelColor = (level: string) => {
+  const getLevelColor = (level: string = 'bronze') => {
     switch(level) {
       case 'diamond': return 'from-cyan-400 to-blue-600';
       case 'gold': return 'from-yellow-400 to-amber-600';
@@ -71,12 +76,6 @@ export const ShortagesView: React.FC<ShortagesViewProps> = ({ onBack }) => {
       case 'bronze': return 'from-orange-400 to-orange-600';
       default: return 'from-slate-400 to-slate-500';
     }
-  };
-
-  const gamification = {
-    level: 'gold',
-    points: 1250,
-    isVerified: true
   };
 
   return (
@@ -95,13 +94,20 @@ export const ShortagesView: React.FC<ShortagesViewProps> = ({ onBack }) => {
         {/* User Gamification Badge */}
         <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 shadow-sm">
           <div className="text-right">
-            <div className="text-[10px] font-black text-slate-400 dark:text-slate-500">نقاطك</div>
-            <div className="text-sm font-black text-rose-600 dark:text-rose-400 leading-none">{gamification.points}</div>
+            <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase">النقاط</div>
+            <div className="text-sm font-black text-rose-600 dark:text-rose-400 leading-none">{user?.points || 0}</div>
           </div>
-          <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getLevelColor(gamification.level)} p-[2px]`}>
-            <div className="w-full h-full bg-white dark:bg-slate-900 rounded-full flex items-center justify-center">
-              <Award size={14} className="text-slate-800 dark:text-slate-200" />
+          <div className="relative group">
+            <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getLevelColor(user?.level)} p-[2px]`}>
+              <div className="w-full h-full bg-white dark:bg-slate-900 rounded-full flex items-center justify-center">
+                <Award size={14} className="text-slate-800 dark:text-slate-200" />
+              </div>
             </div>
+            {user?.premiumTier && user.premiumTier !== 'free' && (
+              <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 border-2 border-white dark:border-slate-900 flex items-center justify-center shadow-sm">
+                <Sparkles size={8} className="text-white" fill="currentColor" />
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -126,8 +132,30 @@ export const ShortagesView: React.FC<ShortagesViewProps> = ({ onBack }) => {
       </div>
 
       <div className="space-y-4">
-        <AnimatePresence>
-          {filteredItems.length > 0 ? filteredItems.map((item) => {
+        {(activeTab === 'expected' || activeTab === 'available') && !isAccessAllowed ? (
+          <MDiv initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-8 bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-slate-800 text-center flex flex-col items-center">
+            <div className="w-20 h-20 rounded-3xl bg-amber-500/10 flex items-center justify-center text-amber-500 mb-6">
+              <Lock size={32} />
+            </div>
+            <h3 className="text-xl font-black text-slate-900 dark:text-white mb-3">خاص للمشتركين فقط</h3>
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 max-w-[240px] leading-relaxed mb-6">
+               توقع النواقص العالمية قبل حدوثها واحصل على تنبيهات التوفر الحصرية من خلال النسخة البريميوم.
+            </p>
+            <button 
+                onClick={() => onBack()}
+                className="w-full max-w-[240px] py-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-[20px] font-black text-xs shadow-xl shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 mb-4"
+              >
+                <Sparkles size={16} fill="currentColor" />
+                تفعيل النسخة البريميوم
+              </button>
+            <div className="flex items-center gap-2 text-amber-500">
+               <Sparkles size={14} />
+               <span className="text-[10px] font-black uppercase tracking-widest">Pharma Core Premium Accessory</span>
+            </div>
+          </MDiv>
+        ) : (
+          <AnimatePresence>
+            {filteredItems.length > 0 ? filteredItems.map((item) => {
             const color = getStatusColor(item.status);
             return (
               <MDiv
@@ -196,7 +224,8 @@ export const ShortagesView: React.FC<ShortagesViewProps> = ({ onBack }) => {
               <p className="text-slate-400 dark:text-slate-500 text-xs mt-1">جرب البحث بكلمات مختلفة</p>
             </MDiv>
           )}
-        </AnimatePresence>
+          </AnimatePresence>
+        )}
       </div>
     </div>
   );
